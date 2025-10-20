@@ -47,11 +47,6 @@
                             <shadedPattern>summer.foliaPhantom.lib.asm</shadedPattern>
                         </relocation>
                     </relocations>
-                    <transformers>
-                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                            <mainClass>summer.foliaPhantom.jar.JarPatcher</mainClass>
-                        </transformer>
-                    </transformers>
                 </configuration>
             </plugin>
         </plugins>
@@ -62,6 +57,37 @@
             </resource>
         </resources>
     </build>
+
+    <profiles>
+        <profile>
+            <id>cli</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <configuration>
+                            <finalName>${project.artifactId}-cli</finalName>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>summer.foliaPhantom.cli.CLI</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <dependencies>
+                <dependency>
+                    <groupId>io.papermc.paper</groupId>
+                    <artifactId>paper-api</artifactId>
+                    <version>1.21.1-R0.1-SNAPSHOT</version>
+                    <scope>compile</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 
     <repositories>
         <repository>

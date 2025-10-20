@@ -9,8 +9,9 @@ summer/foliaPhantom/transformers/WorldGenClassTransformer$WorldGenClassVisitor.c
 summer/foliaPhantom/transformers/SchedulerClassTransformer.class
 summer/foliaPhantom/patchers/FoliaPatcher$FoliaChunkGenerator.class
 summer/foliaPhantom/transformers/ThreadSafetyTransformer$ThreadSafetyClassVisitor.class
-summer/foliaPhantom/transformers/SchedulerClassTransformer$SchedulerClassVisitor.class
 summer/foliaPhantom/transformers/WorldGenClassTransformer$WorldGenMethodVisitor.class
+summer/foliaPhantom/transformers/SchedulerClassTransformer$SchedulerClassVisitor.class
+summer/foliaPhantom/cli/CLI.class
 summer/foliaPhantom/transformers/EntitySchedulerTransformer$EntitySchedulerMethodVisitor.class
 summer/foliaPhantom/transformers/ThreadSafetyTransformer.class
 summer/foliaPhantom/patchers/FoliaPatcher.class
