@@ -3,6 +3,7 @@
 # **日本語 (Japanese)** | [English](#english)
 # windows only
 - Support for Linux will be added in the future.
+
 [![GitHub release](https://img.shields.io/github/v/release/MARVserver/FoliaPhantom.svg)](https://github.com/MARVserver/FoliaPhantom/releases)
 # 重要
 - licenseが変更されました
