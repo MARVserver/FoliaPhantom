@@ -67,6 +67,26 @@ FoliaPhantom-extra は、高度なバイトコードエンジニアリング技�
 6.  **保存**: 全ての変換とパッチが完了したJARを `output` ディレクトリに保存します。
 
 ---
+
+## 📦 ソースからのビルド
+
+このプロジェクトをソースからビルドするには、Mavenが必要です。
+
+### プラグインのみ
+
+```bash
+mvn clean package
+```
+
+### CLIバージョン
+
+CLI（コマンドラインインターフェース）バージョンをビルドするには、`-Pcli`プロファイルを指定します。
+
+```bash
+mvn clean package -Pcli
+```
+
+---
 ---
 
 # English
@@ -127,3 +147,23 @@ FoliaPhantom-extra employs sophisticated bytecode engineering.
     -   **World Generation**: It wraps the `ChunkGenerator` returned by `getDefaultWorldGenerator` and dispatches `createWorld` calls to a dedicated thread to prevent deadlocks.
 5.  **`plugin.yml` Patching**: It adds or overwrites the YAML file to include `folia-supported: true`.
 6.  **Saving**: The fully transformed and patched JAR is saved to the `output` directory.
+
+---
+
+## 📦 Building from Source
+
+To build this project from source, you will need Maven.
+
+### Plugin Only
+
+```bash
+mvn clean package
+```
+
+### CLI Version
+
+To build the CLI (Command-Line Interface) version, specify the `-Pcli` profile:
+
+```bash
+mvn clean package -Pcli
+```

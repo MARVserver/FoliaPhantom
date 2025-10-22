@@ -30,6 +30,7 @@ public final class FoliaPatcher {
             Map.entry("runTaskAsynchronously(Lorg/bukkit/plugin/Plugin;Ljava/lang/Runnable;)Lorg/bukkit/scheduler/BukkitTask;", true),
             Map.entry("runTaskLaterAsynchronously(Lorg/bukkit/plugin/Plugin;Ljava/lang/Runnable;J)Lorg/bukkit/scheduler/BukkitTask;", true),
             Map.entry("runTaskTimerAsynchronously(Lorg/bukkit/plugin/Plugin;Ljava/lang/Runnable;JJ)Lorg/bukkit/scheduler/BukkitTask;", true),
+            Map.entry("runTaskTimerAsynchronously(Lorg/bukkit/plugin/Plugin;Lorg/bukkit/scheduler/BukkitRunnable;JJ)Lorg/bukkit/scheduler/BukkitTask;", true),
             // Legacy methods returning int
             Map.entry("scheduleSyncDelayedTask(Lorg/bukkit/plugin/Plugin;Ljava/lang/Runnable;J)I", true),
             Map.entry("scheduleSyncRepeatingTask(Lorg/bukkit/plugin/Plugin;Ljava/lang/Runnable;JJ)I", true),
@@ -212,14 +213,6 @@ public final class FoliaPatcher {
         return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, foliaTask);
     }
 
-    public static BukkitTask runTaskTimerAsynchronously_onRunnable(org.bukkit.scheduler.BukkitRunnable runnable, Plugin plugin, long delay, long period) {
-        // This is the wrapper for BukkitRunnable calls. It should behave like the original BukkitScheduler method.
-        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runAtFixedRate(plugin, t -> runnable.run(), delay * 50, period * 50, TimeUnit.MILLISECONDS);
-        int taskId = taskIdCounter.getAndIncrement();
-        runningTasks.put(taskId, foliaTask);
-        return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, foliaTask);
-    }
-
     public static BukkitTask runTaskLaterAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable, long delay) {
         int taskId = taskIdCounter.getAndIncrement();
         Runnable wrappedRunnable = wrapRunnable(runnable, taskId, false);
@@ -229,7 +222,8 @@ public final class FoliaPatcher {
     }
 
     public static BukkitTask runTaskTimerAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable, long delay, long period) {
-        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runAtFixedRate(plugin, t -> runnable.run(), Math.max(1, delay) * 50, Math.max(1, period) * 50, TimeUnit.MILLISECONDS);
+        // This now handles both Runnable and BukkitRunnable, as BukkitRunnable is a Runnable.
+        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runAtFixedRate(plugin, t -> runnable.run(), delay * 50, period * 50, TimeUnit.MILLISECONDS);
         int taskId = taskIdCounter.getAndIncrement();
         runningTasks.put(taskId, foliaTask);
         return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, foliaTask);

@@ -41,6 +41,14 @@
               <shadedPattern>summer.foliaPhantom.lib.asm</shadedPattern>
             </relocation>
           </relocations>
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <includes>
+                <include>summer/**</include>
+              </includes>
+            </filter>
+          </filters>
         </configuration>
       </plugin>
     </plugins>
