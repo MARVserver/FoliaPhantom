@@ -1,4 +1,4 @@
-# End of support:warning: 
+# End of support
 
 
 
