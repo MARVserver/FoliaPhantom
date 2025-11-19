@@ -1,9 +1,0 @@
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/FoliaPhantomExtra.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/PluginPatcher.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/cli/CLI.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/patchers/FoliaPatcher.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/transformers/ClassTransformer.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/transformers/EntitySchedulerTransformer.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/transformers/SchedulerClassTransformer.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/transformers/ThreadSafetyTransformer.java
-/app/FoliaPhantom/src/main/java/summer/foliaPhantom/transformers/WorldGenClassTransformer.java

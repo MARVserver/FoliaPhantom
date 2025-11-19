@@ -1,0 +1,7 @@
+name: FoliaPhantom
+version: ${project.version}
+main: com.patch.foliaphantom.plugin.FoliaPhantomPlugin
+api-version: '1.21'
+author: Patch
+description: >
+  Patches plugins to be compatible with Folia.

@@ -1,6 +1,0 @@
-name: FoliaPhantom-extra
-version: '1.0-SNAPSHOT'
-main: summer.foliaPhantom.FoliaPhantomExtra
-api-version: '1.21'
-folia-supported: true
-author: marvgame
