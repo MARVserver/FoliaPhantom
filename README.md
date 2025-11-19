@@ -1,4 +1,55 @@
 # Folia Phantom  
+*General-purpose compatibility patcher for running Bukkit plugins on Folia servers*
+
+## Overview
+
+**Folia Phantom (General Edition)** is an open-source tool designed to make Bukkit plugins compatible with the **Folia multi-threaded server**.  
+It analyzes plugin classes and replaces thread-unsafe Bukkit API calls with their Folia-safe counterparts.
+
+Bytecode transformation is handled through **ASM**, enabling many plugins to run safely on Folia without manual modifications.
+
+The project is structured into the following modules:
+
+- **Core Library** — Bytecode transformation engine and plugin patcher  
+- **CLI Tool** — Stand-alone JAR patching utility  
+- **Bukkit Plugin Edition** — Applies patches dynamically on the server  
+- **GUI Edition** — Desktop application for one-click patching
+
+---
+
+## Project Structure
+
+### `folia-phantom-core`
+The central library containing the transformation logic, including:
+- ASM-based transformers  
+- Bytecode analyzers  
+- Bukkit → Folia API mapping rules  
+- JAR patching utilities
+
+### `folia-phantom-cli`
+A command-line tool providing:
+- Single-file or directory-wide JAR patching  
+- Batch processing  
+- Local Folia-compatibility preparation workflows
+
+### `folia-phantom-plugin`
+A Bukkit plugin that dynamically patches other plugins at load time:
+- Analyzes plugin bytecode on load  
+- Automatically replaces incompatible Folia API calls  
+- Ensures safer behavior within Folia’s region-threading model
+
+### `folia-phantom-GUI`
+A desktop software edition featuring:
+- One-click plugin patching  
+- User-friendly interface for non-technical operators
+
+---
+
+## Legacy Code Notice
+- Modification of legacy components is allowed under the project’s license.  
+- Patched output must be made publicly visible to ensure transparency for all users.
+
+# Folia Phantom  
 *Folia サーバー向け Bukkit プラグイン互換パッチツール（一般版）*
 
 ## 概要
@@ -41,4 +92,9 @@
 GUIで簡単にパッチできるソフトウェア版
 - ワンクリック
 
+### 古いコード
+- 改造を許可しますがライセンスを守ってください
+- パッチしたものはすべての人が見れるように開示してください
+
 ---
+
