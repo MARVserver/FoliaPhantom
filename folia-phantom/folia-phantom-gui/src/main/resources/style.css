@@ -1,0 +1,139 @@
+#root-pane {
+    -fx-background-color: transparent;
+    /* Transparent for the stage */
+}
+
+#glass-container {
+    -fx-background-image: url("back.png");
+    -fx-background-size: cover;
+    -fx-background-position: center center;
+
+    /* Glass effect overlay */
+    -fx-background-color: linear-gradient(to bottom right, rgba(30, 30, 30, 0.8), rgba(10, 10, 10, 0.9));
+    -fx-background-radius: 30;
+    -fx-border-radius: 30;
+    -fx-border-color: rgba(255, 255, 255, 0.2);
+    -fx-border-width: 1;
+
+    /* Shadow for depth */
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.6), 30, 0, 0, 10);
+}
+
+#title-label {
+    -fx-font-size: 36px;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 5, 0.5, 0, 2);
+}
+
+.window-control-button {
+    -fx-background-color: rgba(255, 255, 255, 0.1);
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 50%;
+    -fx-min-width: 30px;
+    -fx-min-height: 30px;
+    -fx-cursor: hand;
+}
+
+.window-control-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.3);
+}
+
+#close-button:hover {
+    -fx-background-color: rgba(255, 50, 50, 0.8);
+}
+
+#drag-drop-area {
+    -fx-background-color: rgba(255, 255, 255, 0.05);
+    -fx-border-color: rgba(255, 255, 255, 0.3);
+    -fx-border-style: dashed;
+    -fx-border-width: 2;
+    -fx-border-radius: 15;
+    -fx-background-radius: 15;
+    -fx-padding: 30;
+    -fx-cursor: hand;
+    -fx-transition: all 0.3s;
+}
+
+#drag-drop-area:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.1);
+    -fx-border-color: rgba(255, 255, 255, 0.6);
+}
+
+#drag-drop-label {
+    -fx-text-fill: #cccccc;
+    -fx-font-size: 16px;
+}
+
+.glass-button {
+    -fx-background-color: rgba(255, 255, 255, 0.15);
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 20;
+    -fx-border-radius: 20;
+    -fx-border-color: rgba(255, 255, 255, 0.3);
+    -fx-padding: 10 25;
+    -fx-cursor: hand;
+}
+
+.glass-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.25);
+    -fx-effect: dropshadow(gaussian, rgba(255, 255, 255, 0.3), 10, 0, 0, 0);
+}
+
+#patch-button {
+    -fx-background-color: linear-gradient(to right, #4a90e2, #0056b3);
+    -fx-font-size: 18px;
+    -fx-padding: 12 40;
+    -fx-border-color: transparent;
+}
+
+#patch-button:hover {
+    -fx-background-color: linear-gradient(to right, #5aa0f2, #1066c3);
+}
+
+#file-list {
+    -fx-background-color: rgba(0, 0, 0, 0.3);
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-control-inner-background: transparent;
+    -fx-padding: 5;
+}
+
+#file-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: white;
+}
+
+#file-list .list-cell:filled:selected {
+    -fx-background-color: rgba(255, 255, 255, 0.2);
+    -fx-background-radius: 5;
+}
+
+#status-area {
+    -fx-background-color: rgba(0, 0, 0, 0.5);
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-color: rgba(255, 255, 255, 0.1);
+}
+
+#status-area .content {
+    -fx-background-color: transparent;
+}
+
+#status-area .text {
+    -fx-fill: #00ff99;
+    -fx-font-family: "Monospaced";
+}
+
+.progress-bar {
+    -fx-accent: #00ff99;
+    -fx-control-inner-background: rgba(255, 255, 255, 0.1);
+}
+
+#progress-label {
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+}
