@@ -1,4 +1,4 @@
-# Folia Phantom --- Enterprise Edition
+# Folia Phantom --- 
 
 *High-Performance Folia Compatibility Layer for Legacy Bukkit Plugins*
 
