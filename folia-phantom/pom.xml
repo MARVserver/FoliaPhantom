@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.patch.foliaphantom</groupId>
+    <artifactId>folia-phantom</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>Folia Phantom</name>
+    <description>A tool to patch Bukkit plugins for Folia compatibility.</description>
+
+    <modules>
+        <module>folia-phantom-core</module>
+        <module>folia-phantom-cli</module>
+        <module>folia-phantom-plugin</module>
+        <module>folia-phantom-gui</module>
+    </modules>
+
+    <properties>
+        <java.version>17</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <asm.version>9.7</asm.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Bytecode manipulation library -->
+            <dependency>
+                <groupId>org.ow2.asm</groupId>
+                <artifactId>asm</artifactId>
+                <version>${asm.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.ow2.asm</groupId>
+                <artifactId>asm-commons</artifactId>
+                <version>${asm.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>papermc-repo</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+    </repositories>
+
+</project>

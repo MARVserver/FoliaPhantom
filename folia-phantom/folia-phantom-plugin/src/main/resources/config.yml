@@ -1,0 +1,40 @@
+# FoliaPhantom Configuration
+
+# Enable or disable automatic patching of plugins
+auto-patch:
+  enabled: true
+  # Folder to monitor for plugins to patch (relative to server root)
+  watch-folder: 'plugins/folia-patch-queue'
+  # Where to place patched plugins (relative to server root)
+  output-folder: 'plugins/patched'
+  # Check interval in seconds
+  check-interval: 5
+
+# Logging settings
+logging:
+  # Log level: INFO, WARNING, SEVERE
+  level: INFO
+  # Verbose logging for debugging
+  verbose: false
+  # Log successful patches
+  log-success: true
+  # Log skipped plugins (already patched)
+  log-skipped: true
+
+# Plugin filtering
+filters:
+  # Skip plugins that are already marked as folia-supported
+  skip-folia-supported: true
+  # Whitelist: Only patch these plugins (empty = all plugins)
+  whitelist: []
+  # Blacklist: Never patch these plugins
+  blacklist: []
+
+# Advanced settings
+advanced:
+  # Delete original plugin after successful patching
+  delete-original: false
+  # Create backup before patching
+  create-backup: true
+  # Backup folder (relative to server root)
+  backup-folder: 'plugins/folia-phantom-backups'

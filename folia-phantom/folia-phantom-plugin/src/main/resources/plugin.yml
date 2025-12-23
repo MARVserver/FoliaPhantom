@@ -1,0 +1,29 @@
+name: FoliaPhantom
+version: ${project.version}
+main: com.patch.foliaphantom.plugin.FoliaPhantomPlugin
+api-version: '1.21'
+author: Patch
+description: >
+  Automatically patches Bukkit plugins for Folia compatibility.
+  Place plugins in 'plugins/folia-patch-queue' for automatic patching.
+folia-supported: true
+
+commands:
+  foliapatch:
+    description: Manage plugin patching operations
+    usage: |
+      /<command> <plugin-name> - Patch a specific plugin
+      /<command> list - List all patchable plugins
+      /<command> status - Show patching statistics
+    permission: foliaphantom.patch
+    aliases: [fpatch, fp]
+
+permissions:
+  foliaphantom.patch:
+    description: Allows patching plugins
+    default: op
+  foliaphantom.admin:
+    description: Full access to all FoliaPhantom features
+    default: op
+    children:
+      foliaphantom.patch: true
