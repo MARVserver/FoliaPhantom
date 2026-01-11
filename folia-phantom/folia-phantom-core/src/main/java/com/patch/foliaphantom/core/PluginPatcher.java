@@ -194,12 +194,12 @@ public class PluginPatcher {
                     classFutures.add(new ClassPatchFuture(
                             name,
                             executor.submit(() -> patchClass(classBytes, name))));
-                } else if (!isDirectory && name.equals("plugin.yml")) {
-                    // Modify plugin.yml to add Folia support flag
+                } else if (!isDirectory && (name.equals("paper-plugin.yml") || name.equals("plugin.yml"))) {
+                    // Modify plugin manifest to add Folia support flag
                     String originalYml = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
                     String modifiedYml = addFoliaSupportedFlag(originalYml);
                     writeEntry(zos, name, modifiedYml.getBytes(StandardCharsets.UTF_8));
-                    logger.fine("[FoliaPhantom] Modified plugin.yml with folia-supported: true");
+                    logger.fine("[FoliaPhantom] Modified " + name + " with folia-supported: true");
                 } else {
                     // Copy other resources directly
                     zos.putNextEntry(new ZipEntry(name));
@@ -392,15 +392,27 @@ public class PluginPatcher {
     public static String getPluginNameFromJar(File jarFile) throws IOException {
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(jarFile.toPath()))) {
             ZipEntry entry;
+            String paperPluginName = null;
+            String pluginName = null;
+
             while ((entry = zis.getNextEntry()) != null) {
-                if (entry.getName().equals("plugin.yml")) {
-                    String content = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
-                    for (String line : content.lines().toList()) {
-                        if (line.trim().startsWith("name:")) {
-                            return line.substring(line.indexOf(":") + 1).trim();
-                        }
-                    }
+                if (entry.getName().equals("paper-plugin.yml")) {
+                    paperPluginName = extractNameFromYml(new String(zis.readAllBytes(), StandardCharsets.UTF_8));
+                } else if (entry.getName().equals("plugin.yml")) {
+                    pluginName = extractNameFromYml(new String(zis.readAllBytes(), StandardCharsets.UTF_8));
                 }
+            }
+            return paperPluginName != null ? paperPluginName : pluginName;
+        }
+    }
+
+    /**
+     * Extracts the name field from a YAML string.
+     */
+    private static String extractNameFromYml(String content) {
+        for (String line : content.lines().toList()) {
+            if (line.trim().startsWith("name:")) {
+                return line.substring(line.indexOf(":") + 1).trim();
             }
         }
         return null;
@@ -417,10 +429,12 @@ public class PluginPatcher {
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(jarFile.toPath()))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
-                if (entry.getName().equals("plugin.yml")) {
+                String name = entry.getName();
+                if (name.equals("paper-plugin.yml") || name.equals("plugin.yml")) {
                     String content = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
-                    return content.lines()
-                            .anyMatch(line -> line.trim().equalsIgnoreCase("folia-supported: true"));
+                    if (content.lines().anyMatch(line -> line.trim().equalsIgnoreCase("folia-supported: true"))) {
+                        return true;
+                    }
                 }
             }
         }
