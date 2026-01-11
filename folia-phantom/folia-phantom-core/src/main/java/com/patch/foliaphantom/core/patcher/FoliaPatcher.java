@@ -137,7 +137,11 @@ public final class FoliaPatcher {
     // --- Helper Methods ---
 
     private static Location getFallbackLocation() {
-        World mainWorld = Bukkit.getWorlds().get(0);
+        List<World> worlds = Bukkit.getWorlds();
+        if (worlds.isEmpty()) {
+            return null;
+        }
+        World mainWorld = worlds.get(0);
         return mainWorld != null ? mainWorld.getSpawnLocation() : null;
     }
 
