@@ -332,12 +332,20 @@ public final class FoliaPatcher {
         return runTaskLater(s, p, r, d).getTaskId();
     }
 
+    public static int scheduleSyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r) {
+        return runTask(s, p, r).getTaskId();
+    }
+
     public static int scheduleSyncRepeatingTask(BukkitScheduler s, Plugin p, Runnable r, long d, long pr) {
         return runTaskTimer(s, p, r, d, pr).getTaskId();
     }
 
     public static int scheduleAsyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r, long d) {
         return runTaskLaterAsynchronously(s, p, r, d).getTaskId();
+    }
+
+    public static int scheduleAsyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r) {
+        return runTaskAsynchronously(s, p, r).getTaskId();
     }
 
     public static int scheduleAsyncRepeatingTask(BukkitScheduler s, Plugin p, Runnable r, long d, long pr) {
