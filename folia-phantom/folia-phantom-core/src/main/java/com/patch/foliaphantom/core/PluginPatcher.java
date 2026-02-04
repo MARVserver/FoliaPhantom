@@ -396,9 +396,14 @@ public class PluginPatcher {
             String pluginName = null;
 
             while ((entry = zis.getNextEntry()) != null) {
-                if (entry.getName().equals("paper-plugin.yml")) {
+                if (entry.isDirectory()) {
+                    continue;
+                }
+
+                String entryName = entry.getName();
+                if ("paper-plugin.yml".equals(entryName)) {
                     paperPluginName = extractNameFromYml(new String(zis.readAllBytes(), StandardCharsets.UTF_8));
-                } else if (entry.getName().equals("plugin.yml")) {
+                } else if ("plugin.yml".equals(entryName)) {
                     pluginName = extractNameFromYml(new String(zis.readAllBytes(), StandardCharsets.UTF_8));
                 }
             }
@@ -429,10 +434,17 @@ public class PluginPatcher {
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(jarFile.toPath()))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
+                if (entry.isDirectory()) {
+                    continue;
+                }
                 String name = entry.getName();
-                if (name.equals("paper-plugin.yml") || name.equals("plugin.yml")) {
+                if ("paper-plugin.yml".equals(name) || "plugin.yml".equals(name)) {
                     String content = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
-                    if (content.lines().anyMatch(line -> line.trim().equalsIgnoreCase("folia-supported: true"))) {
+                    if (content.lines().anyMatch(line -> {
+                        String trimmed = line.trim();
+                        return trimmed.toLowerCase().startsWith("folia-supported:")
+                                && trimmed.toLowerCase().endsWith("true");
+                    })) {
                         return true;
                     }
                 }

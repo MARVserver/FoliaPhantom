@@ -17,6 +17,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -145,6 +146,23 @@ public final class FoliaPatcher {
         return mainWorld != null ? mainWorld.getSpawnLocation() : null;
     }
 
+    private static Plugin resolvePlugin(Plugin provided) {
+        if (provided != null) {
+            return provided;
+        }
+        if (plugin != null) {
+            return plugin;
+        }
+        try {
+            Plugin resolved = JavaPlugin.getProvidingPlugin(FoliaPatcher.class);
+            plugin = resolved;
+            return resolved;
+        } catch (IllegalArgumentException e) {
+            LOGGER.warning("[FoliaPhantom] Unable to resolve providing plugin for scheduler operations.");
+            return null;
+        }
+    }
+
     private static void cancelTaskById(int taskId) {
         ScheduledTask task = runningTasks.remove(taskId);
         if (task != null && !task.isCancelled()) {
@@ -170,13 +188,20 @@ public final class FoliaPatcher {
         int taskId = taskIdCounter.getAndIncrement();
         Runnable wrapped = wrapRunnable(runnable, taskId, false);
         Location loc = getFallbackLocation();
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, null);
+        }
 
         ScheduledTask foliaTask = (loc != null)
-                ? Bukkit.getRegionScheduler().run(plugin, loc, t -> wrapped.run())
-                : Bukkit.getGlobalRegionScheduler().run(plugin, t -> wrapped.run());
+                ? Bukkit.getRegionScheduler().run(resolvedPlugin, loc, t -> wrapped.run())
+                : Bukkit.getGlobalRegionScheduler().run(resolvedPlugin, t -> wrapped.run());
 
         runningTasks.put(taskId, foliaTask);
-        return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, true, foliaTask);
     }
 
     public static BukkitTask runTaskLater(BukkitScheduler ignored, Plugin plugin, Runnable runnable, long delay) {
@@ -184,13 +209,20 @@ public final class FoliaPatcher {
         Runnable wrapped = wrapRunnable(runnable, taskId, false);
         Location loc = getFallbackLocation();
         long finalDelay = Math.max(1, delay);
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule delayed task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, null);
+        }
 
         ScheduledTask foliaTask = (loc != null)
-                ? Bukkit.getRegionScheduler().runDelayed(plugin, loc, t -> wrapped.run(), finalDelay)
-                : Bukkit.getGlobalRegionScheduler().runDelayed(plugin, t -> wrapped.run(), finalDelay);
+                ? Bukkit.getRegionScheduler().runDelayed(resolvedPlugin, loc, t -> wrapped.run(), finalDelay)
+                : Bukkit.getGlobalRegionScheduler().runDelayed(resolvedPlugin, t -> wrapped.run(), finalDelay);
 
         runningTasks.put(taskId, foliaTask);
-        return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, true, foliaTask);
     }
 
     public static BukkitTask runTaskTimer(BukkitScheduler ignored, Plugin plugin, Runnable runnable, long delay,
@@ -199,40 +231,71 @@ public final class FoliaPatcher {
         Location loc = getFallbackLocation();
         long d = Math.max(1, delay);
         long p = Math.max(1, period);
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule repeating task: no plugin instance available.");
+            runnable.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, null);
+        }
 
         ScheduledTask foliaTask = (loc != null)
-                ? Bukkit.getRegionScheduler().runAtFixedRate(plugin, loc, t -> runnable.run(), d, p)
-                : Bukkit.getGlobalRegionScheduler().runAtFixedRate(plugin, t -> runnable.run(), d, p);
+                ? Bukkit.getRegionScheduler().runAtFixedRate(resolvedPlugin, loc, t -> runnable.run(), d, p)
+                : Bukkit.getGlobalRegionScheduler().runAtFixedRate(resolvedPlugin, t -> runnable.run(), d, p);
 
         runningTasks.put(taskId, foliaTask);
-        return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, true, foliaTask);
     }
 
     public static BukkitTask runTaskAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable) {
         int taskId = taskIdCounter.getAndIncrement();
         Runnable wrapped = wrapRunnable(runnable, taskId, false);
-        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runNow(plugin, t -> wrapped.run());
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule async task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, null);
+        }
+
+        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runNow(resolvedPlugin, t -> wrapped.run());
         runningTasks.put(taskId, foliaTask);
-        return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, false, foliaTask);
     }
 
     public static BukkitTask runTaskLaterAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable,
             long delay) {
         int taskId = taskIdCounter.getAndIncrement();
         Runnable wrapped = wrapRunnable(runnable, taskId, false);
-        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runDelayed(plugin, t -> wrapped.run(), delay * 50,
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule async delayed task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, null);
+        }
+
+        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runDelayed(resolvedPlugin, t -> wrapped.run(), delay * 50,
                 TimeUnit.MILLISECONDS);
         runningTasks.put(taskId, foliaTask);
-        return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, false, foliaTask);
     }
 
     public static BukkitTask runTaskTimerAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable,
             long delay, long period) {
         int taskId = taskIdCounter.getAndIncrement();
-        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runAtFixedRate(plugin, t -> runnable.run(), delay * 50,
-                period * 50, TimeUnit.MILLISECONDS);
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule async repeating task: no plugin instance available.");
+            runnable.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, null);
+        }
+
+        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runAtFixedRate(resolvedPlugin, t -> runnable.run(),
+                delay * 50, period * 50, TimeUnit.MILLISECONDS);
         runningTasks.put(taskId, foliaTask);
-        return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, false, foliaTask);
     }
 
     // --- BukkitRunnable Instance Method Wrappers ---
@@ -297,11 +360,17 @@ public final class FoliaPatcher {
 
         @Override
         public boolean isCancelled() {
+            if (underlyingTask == null) {
+                return true;
+            }
             return underlyingTask.isCancelled();
         }
 
         @Override
         public void cancel() {
+            if (underlyingTask == null) {
+                return;
+            }
             if (!isCancelled()) {
                 cancellationCallback.accept(this.taskId);
             }
@@ -311,18 +380,29 @@ public final class FoliaPatcher {
     // --- Thread-Safe Block Operations ---
 
     public static void safeSetType(Block block, org.bukkit.Material material) {
+        Plugin resolvedPlugin = resolvePlugin(plugin);
         if (Bukkit.isPrimaryThread()) {
             block.setType(material);
         } else {
-            Bukkit.getRegionScheduler().run(plugin, block.getLocation(), task -> block.setType(material));
+            if (resolvedPlugin == null) {
+                LOGGER.severe("[FoliaPhantom] Cannot schedule block update: no plugin instance available.");
+                return;
+            }
+            Bukkit.getRegionScheduler().run(resolvedPlugin, block.getLocation(), task -> block.setType(material));
         }
     }
 
     public static void safeSetTypeWithPhysics(Block block, org.bukkit.Material material, boolean applyPhysics) {
+        Plugin resolvedPlugin = resolvePlugin(plugin);
         if (Bukkit.isPrimaryThread()) {
             block.setType(material, applyPhysics);
         } else {
-            Bukkit.getRegionScheduler().run(plugin, block.getLocation(), task -> block.setType(material, applyPhysics));
+            if (resolvedPlugin == null) {
+                LOGGER.severe("[FoliaPhantom] Cannot schedule block update: no plugin instance available.");
+                return;
+            }
+            Bukkit.getRegionScheduler().run(resolvedPlugin, block.getLocation(),
+                    task -> block.setType(material, applyPhysics));
         }
     }
 
