@@ -114,7 +114,7 @@ public class PluginWatcher implements Runnable {
         // Check blacklist
         List<String> blacklist = config.getStringList("filters.blacklist");
         for (String pattern : blacklist) {
-            if (fileName.matches(pattern.replace("*", ".*"))) {
+            if (matchesPattern(fileName, pattern)) {
                 return false;
             }
         }
@@ -124,7 +124,7 @@ public class PluginWatcher implements Runnable {
         if (!whitelist.isEmpty()) {
             boolean inWhitelist = false;
             for (String pattern : whitelist) {
-                if (fileName.matches(pattern.replace("*", ".*"))) {
+                if (matchesPattern(fileName, pattern)) {
                     inWhitelist = true;
                     break;
                 }
@@ -142,6 +142,11 @@ public class PluginWatcher implements Runnable {
         }
 
         return true;
+    }
+
+    private boolean matchesPattern(String fileName, String pattern) {
+        String regex = "\\Q" + pattern.replace("*", "\\E.*\\Q") + "\\E";
+        return fileName.matches(regex);
     }
 
     private void patchPlugin(File jarFile) throws IOException {
