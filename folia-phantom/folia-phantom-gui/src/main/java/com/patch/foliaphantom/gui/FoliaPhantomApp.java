@@ -241,7 +241,7 @@ public class FoliaPhantomApp extends Application {
 
         // Console
         VBox consoleBox = new VBox(5);
-        Label consoleTitle = new Label("CONSOLLE");
+        Label consoleTitle = new Label("CONSOLE");
         consoleTitle.getStyleClass().add("card-title");
         statusArea = new TextArea();
         statusArea.setEditable(false);

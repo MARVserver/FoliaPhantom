@@ -15,6 +15,7 @@ commands:
       /<command> <plugin-name> - Patch a specific plugin
       /<command> list - List all patchable plugins
       /<command> status - Show patching statistics
+      /<command> reload - Reload configuration
     permission: foliaphantom.patch
     aliases: [fpatch, fp]
 

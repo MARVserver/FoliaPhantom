@@ -368,7 +368,7 @@ public class PluginPatcher {
      * @param pluginYml Original plugin.yml content
      * @return Modified plugin.yml content
      */
-    private String addFoliaSupportedFlag(String pluginYml) {
+    String addFoliaSupportedFlag(String pluginYml) {
         if (pluginYml.lines().anyMatch(line -> line.trim().startsWith("folia-supported:"))) {
             // Update existing flag
             return pluginYml.replaceAll("(?m)^\\s*folia-supported:.*$", "folia-supported: true");
