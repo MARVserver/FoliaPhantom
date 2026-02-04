@@ -278,6 +278,13 @@ public class FoliaPhantomApp extends Application {
             return;
         }
 
+        if (outputDirectory != null && !outputDirectory.exists()) {
+            if (!outputDirectory.mkdirs()) {
+                logError("Failed to create output directory: " + outputDirectory.getAbsolutePath());
+                return;
+            }
+        }
+
         setUIState(false);
         successCount.set(0);
         failureCount.set(0);
@@ -386,7 +393,12 @@ public class FoliaPhantomApp extends Application {
     }
 
     private void loadStylesheet(Scene s) {
-        s.getStylesheets().add(getClass().getResource("/style.css").toExternalForm());
+        java.net.URL stylesheet = getClass().getResource("/style.css");
+        if (stylesheet == null) {
+            logError("Could not load stylesheet: /style.css");
+            return;
+        }
+        s.getStylesheets().add(stylesheet.toExternalForm());
     }
 
     private Logger createLogger() {
