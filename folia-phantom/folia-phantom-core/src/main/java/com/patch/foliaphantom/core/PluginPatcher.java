@@ -168,6 +168,13 @@ public class PluginPatcher {
 
         // Container for async class patching results
         List<ClassPatchFuture> classFutures = new ArrayList<>(256);
+        java.util.Set<String> writtenEntries = new java.util.HashSet<>();
+        java.util.Set<String> reservedEntries = new java.util.HashSet<>();
+
+        Path parent = destination.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
 
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(source));
                 ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(destination))) {
@@ -187,6 +194,11 @@ public class PluginPatcher {
                     continue;
                 }
 
+                if (writtenEntries.contains(name) || reservedEntries.contains(name)) {
+                    logger.warning("[FoliaPhantom] Duplicate entry skipped: " + name);
+                    continue;
+                }
+
                 if (!isDirectory && name.endsWith(".class")) {
                     // Queue class for parallel transformation
                     byte[] classBytes = zis.readAllBytes();
@@ -194,19 +206,20 @@ public class PluginPatcher {
                     classFutures.add(new ClassPatchFuture(
                             name,
                             executor.submit(() -> patchClass(classBytes, name))));
+                    reservedEntries.add(name);
                 } else if (!isDirectory && (name.equals("paper-plugin.yml") || name.equals("plugin.yml"))) {
                     // Modify plugin manifest to add Folia support flag
                     String originalYml = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
                     String modifiedYml = addFoliaSupportedFlag(originalYml);
-                    writeEntry(zos, name, modifiedYml.getBytes(StandardCharsets.UTF_8));
+                    writeEntry(zos, name, modifiedYml.getBytes(StandardCharsets.UTF_8), writtenEntries);
                     logger.fine("[FoliaPhantom] Modified " + name + " with folia-supported: true");
                 } else {
                     // Copy other resources directly
-                    zos.putNextEntry(new ZipEntry(name));
-                    if (!isDirectory) {
-                        copyStream(zis, zos);
+                    if (isDirectory) {
+                        writeEntry(zos, name, new byte[0], writtenEntries);
+                    } else {
+                        writeEntry(zos, name, zis, writtenEntries);
                     }
-                    zos.closeEntry();
                 }
             }
 
@@ -214,7 +227,7 @@ public class PluginPatcher {
             for (ClassPatchFuture cpf : classFutures) {
                 try {
                     ClassPatchResult result = cpf.future.get();
-                    writeEntry(zos, cpf.name, result.bytes);
+                    writeEntry(zos, cpf.name, result.bytes, writtenEntries);
 
                     if (result.wasTransformed) {
                         classesTransformed.incrementAndGet();
@@ -227,7 +240,7 @@ public class PluginPatcher {
             }
 
             // Bundle FoliaPatcher runtime classes
-            bundleFoliaPatcherClasses(zos);
+            bundleFoliaPatcherClasses(zos, writtenEntries);
         }
         // Note: ForkJoinPool.commonPool() should not be shut down
     }
@@ -243,10 +256,30 @@ public class PluginPatcher {
     /**
      * Writes an entry to the ZIP output stream.
      */
-    private void writeEntry(ZipOutputStream zos, String name, byte[] data) throws IOException {
+    private void writeEntry(ZipOutputStream zos, String name, byte[] data, java.util.Set<String> writtenEntries)
+            throws IOException {
+        if (writtenEntries.contains(name)) {
+            logger.warning("[FoliaPhantom] Duplicate entry ignored: " + name);
+            return;
+        }
         zos.putNextEntry(new ZipEntry(name));
-        zos.write(data);
+        if (data.length > 0) {
+            zos.write(data);
+        }
         zos.closeEntry();
+        writtenEntries.add(name);
+    }
+
+    private void writeEntry(ZipOutputStream zos, String name, InputStream data, java.util.Set<String> writtenEntries)
+            throws IOException {
+        if (writtenEntries.contains(name)) {
+            logger.warning("[FoliaPhantom] Duplicate entry ignored: " + name);
+            return;
+        }
+        zos.putNextEntry(new ZipEntry(name));
+        copyStream(data, zos);
+        zos.closeEntry();
+        writtenEntries.add(name);
     }
 
     /**
@@ -260,7 +293,8 @@ public class PluginPatcher {
      * @param zos The output ZIP stream
      * @throws IOException If bundling fails
      */
-    private void bundleFoliaPatcherClasses(ZipOutputStream zos) throws IOException {
+    private void bundleFoliaPatcherClasses(ZipOutputStream zos, java.util.Set<String> writtenEntries)
+            throws IOException {
         Class<?> patcherClass = com.patch.foliaphantom.core.patcher.FoliaPatcher.class;
         String classPath = patcherClass.getName().replace('.', '/');
 
@@ -273,7 +307,7 @@ public class PluginPatcher {
 
         int bundled = 0;
         for (String clazz : classesToBundle) {
-            if (bundleClass(zos, clazz)) {
+            if (bundleClass(zos, clazz, writtenEntries)) {
                 bundled++;
             }
         }
@@ -288,7 +322,12 @@ public class PluginPatcher {
      * @param classPath The internal class path
      * @return true if bundled successfully, false otherwise
      */
-    private boolean bundleClass(ZipOutputStream zos, String classPath) throws IOException {
+    private boolean bundleClass(ZipOutputStream zos, String classPath, java.util.Set<String> writtenEntries)
+            throws IOException {
+        if (writtenEntries.contains(classPath)) {
+            logger.warning("[FoliaPhantom] Runtime class already exists: " + classPath);
+            return false;
+        }
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(classPath)) {
             if (is == null) {
                 logger.warning("[FoliaPhantom] Runtime class not found: " + classPath);
@@ -297,6 +336,7 @@ public class PluginPatcher {
             zos.putNextEntry(new ZipEntry(classPath));
             copyStream(is, zos);
             zos.closeEntry();
+            writtenEntries.add(classPath);
             return true;
         }
     }

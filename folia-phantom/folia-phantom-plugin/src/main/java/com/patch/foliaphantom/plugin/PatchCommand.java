@@ -118,8 +118,10 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.WHITE + "Failed: " + ChatColor.RED + stats.get("failed"));
 
         File serverRoot = plugin.getDataFolder().getParentFile().getParentFile();
-        File watchFolder = new File(serverRoot, plugin.getConfig().getString("auto-patch.watch-folder"));
-        File outputFolder = new File(serverRoot, plugin.getConfig().getString("auto-patch.output-folder"));
+        File watchFolder = new File(serverRoot,
+                plugin.getConfig().getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
+        File outputFolder = new File(serverRoot,
+                plugin.getConfig().getString("auto-patch.output-folder", "plugins/patched"));
 
         sender.sendMessage(ChatColor.GRAY + "Watch Folder: " + watchFolder.getAbsolutePath());
         sender.sendMessage(ChatColor.GRAY + "Output Folder: " + outputFolder.getAbsolutePath());
