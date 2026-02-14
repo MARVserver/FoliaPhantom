@@ -57,10 +57,13 @@ public class CLI {
     }
 
     private static void printBanner() {
-        System.out.println("======================================================================");
-        System.out.println(" Folia Phantom CLI");
-        System.out.println(" A utility for patching Bukkit plugins for Folia compatibility.");
-        System.out.println("======================================================================");
+        System.out.println("███████╗ ██████╗ ██╗     ██╗ █████╗     ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗");
+        System.out.println("██╔════╝██╔═══██╗██║     ██║██╔══██╗    ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║");
+        System.out.println("█████╗  ██║   ██║██║     ██║███████║    ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║");
+        System.out.println("██╔══╝  ██║   ██║██║     ██║██╔══██║    ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║");
+        System.out.println("██║     ╚██████╔╝███████╗██║██║  ██║    ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║");
+        System.out.println("╚═╝      ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═╝    ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝");
+        System.out.println("\nCLI utility for patching Bukkit plugins for Folia compatibility.\n");
     }
 
     private static File getInputFile(String[] args) {

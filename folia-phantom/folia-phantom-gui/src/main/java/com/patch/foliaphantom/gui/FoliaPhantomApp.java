@@ -29,10 +29,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.*;
 
 /**
@@ -61,6 +61,7 @@ public class FoliaPhantomApp extends Application {
     // Statistics
     private final AtomicInteger successCount = new AtomicInteger(0);
     private final AtomicInteger failureCount = new AtomicInteger(0);
+    private final AtomicBoolean verboseLoggingEnabled = new AtomicBoolean(false);
 
     @Override
     public void start(Stage primaryStage) {
@@ -199,6 +200,8 @@ public class FoliaPhantomApp extends Application {
 
         verboseLoggingCheckbox = new CheckBox("Verbose logging");
         verboseLoggingCheckbox.getStyleClass().add("custom-checkbox");
+        verboseLoggingCheckbox.selectedProperty().addListener((obs, oldValue, newValue) ->
+                verboseLoggingEnabled.set(Boolean.TRUE.equals(newValue)));
         controls.add(verboseLoggingCheckbox, 0, 1);
 
         Button outDirBtn = new Button("Change Output Folder");
@@ -407,7 +410,7 @@ public class FoliaPhantomApp extends Application {
         l.addHandler(new Handler() {
             @Override
             public void publish(LogRecord r) {
-                if (verboseLoggingCheckbox.isSelected())
+                if (verboseLoggingEnabled.get())
                     appendLog("[PATCHER] " + r.getMessage());
             }
 
