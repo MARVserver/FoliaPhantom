@@ -13,6 +13,8 @@
 
     <properties>
         <javafx.version>21.0.1</javafx.version>
+        <jpackage.outputDir>${project.build.directory}/dist</jpackage.outputDir>
+        <jpackage.appName>FoliaPhantom</jpackage.appName>
     </properties>
 
     <dependencies>
@@ -74,4 +76,35 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>app-image</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <version>1.7.5</version>
+                        <executions>
+                            <execution>
+                                <id>build-app-image</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jpackage</goal>
+                                </goals>
+                                <configuration>
+                                    <type>app-image</type>
+                                    <name>${jpackage.appName}</name>
+                                    <dest>${jpackage.outputDir}</dest>
+                                    <mainJar>${project.build.finalName}.jar</mainJar>
+                                    <mainClass>com.patch.foliaphantom.gui.Launcher</mainClass>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
