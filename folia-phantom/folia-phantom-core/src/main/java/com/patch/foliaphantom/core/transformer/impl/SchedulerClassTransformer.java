@@ -51,7 +51,7 @@ public class SchedulerClassTransformer implements ClassTransformer {
         @Override
         public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean isInterface) {
             // Redirect BukkitScheduler interface calls
-            if ("org/bukkit/scheduler/BukkitScheduler".equals(owner) && opcode == Opcodes.INVOKEINTERFACE) {
+            if (isBukkitSchedulerOwner(owner) && isSchedulerInvokeOpcode(opcode)) {
                 if (isSchedulerMethod(name, desc)) {
                     String newDesc = "(Lorg/bukkit/scheduler/BukkitScheduler;" + desc.substring(1);
                     super.visitMethodInsn(Opcodes.INVOKESTATIC, PATCHER, name, newDesc, false);
@@ -74,6 +74,15 @@ public class SchedulerClassTransformer implements ClassTransformer {
             String mk = name + desc;
             return mk.startsWith("runTask") || mk.startsWith("scheduleSync") ||
                     mk.startsWith("scheduleAsync") || mk.startsWith("cancel");
+        }
+
+        private boolean isBukkitSchedulerOwner(String owner) {
+            return "org/bukkit/scheduler/BukkitScheduler".equals(owner)
+                    || "org/bukkit/craftbukkit/scheduler/CraftScheduler".equals(owner);
+        }
+
+        private boolean isSchedulerInvokeOpcode(int opcode) {
+            return opcode == Opcodes.INVOKEINTERFACE || opcode == Opcodes.INVOKEVIRTUAL;
         }
 
         private boolean isBukkitRunnableInstanceMethod(String name, String desc) {
