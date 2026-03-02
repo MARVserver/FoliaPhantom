@@ -1,0 +1,8 @@
+rootProject.name = 'FoliaPhantom'
+
+include ':folia-phantom-core', ':folia-phantom-cli', ':folia-phantom-plugin', ':folia-phantom-gui'
+
+project(':folia-phantom-core').projectDir = file('folia-phantom/folia-phantom-core')
+project(':folia-phantom-cli').projectDir = file('folia-phantom/folia-phantom-cli')
+project(':folia-phantom-plugin').projectDir = file('folia-phantom/folia-phantom-plugin')
+project(':folia-phantom-gui').projectDir = file('folia-phantom/folia-phantom-gui')

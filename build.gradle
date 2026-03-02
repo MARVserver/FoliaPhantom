@@ -1,0 +1,64 @@
+plugins {
+    id 'base'
+}
+
+group = 'com.patch.foliaphantom'
+version = '1.0.0'
+
+ext {
+    asmVersion = '9.7'
+    paperApiVersion = '1.21.1-R0.1-SNAPSHOT'
+    junitVersion = '5.10.2'
+    javafxVersion = '21.0.1'
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(':folia-phantom-core') {
+    dependencies {
+        implementation "org.ow2.asm:asm:${asmVersion}"
+        implementation "org.ow2.asm:asm-commons:${asmVersion}"
+        compileOnly "io.papermc.paper:paper-api:${paperApiVersion}"
+        testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+    }
+}
+
+project(':folia-phantom-cli') {
+    dependencies {
+        implementation project(':folia-phantom-core')
+    }
+}
+
+project(':folia-phantom-plugin') {
+    dependencies {
+        implementation project(':folia-phantom-core')
+        compileOnly "io.papermc.paper:paper-api:${paperApiVersion}"
+    }
+}
+
+project(':folia-phantom-gui') {
+    dependencies {
+        implementation project(':folia-phantom-core')
+        implementation "org.openjfx:javafx-controls:${javafxVersion}"
+        implementation "org.openjfx:javafx-fxml:${javafxVersion}"
+    }
+}
