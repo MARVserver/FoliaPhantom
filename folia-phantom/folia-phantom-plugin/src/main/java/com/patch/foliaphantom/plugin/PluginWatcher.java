@@ -9,8 +9,10 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 public class PluginWatcher implements Runnable {
     private final Logger logger;
@@ -19,6 +21,12 @@ public class PluginWatcher implements Runnable {
     private final File outputFolder;
     private final File backupFolder;
     private final FileConfiguration config;
+    private final boolean verboseLogging;
+    private final boolean logSkipped;
+    private final boolean skipFoliaSupported;
+    private final List<Pattern> blacklistPatterns;
+    private final List<Pattern> whitelistPatterns;
+    private final AtomicBoolean scanning = new AtomicBoolean(false);
 
     private final Map<String, Long> processedFiles = new ConcurrentHashMap<>();
     private int patchedCount = 0;
@@ -29,6 +37,11 @@ public class PluginWatcher implements Runnable {
         this.logger = plugin.getLogger();
         this.config = plugin.getConfig();
         this.patcher = new PluginPatcher(logger);
+        this.verboseLogging = config.getBoolean("logging.verbose", false);
+        this.logSkipped = config.getBoolean("logging.log-skipped", true);
+        this.skipFoliaSupported = config.getBoolean("filters.skip-folia-supported", true);
+        this.blacklistPatterns = compilePatterns(config.getStringList("filters.blacklist"));
+        this.whitelistPatterns = compilePatterns(config.getStringList("filters.whitelist"));
 
         // Initialize folders
         File serverRoot = plugin.getDataFolder().getParentFile().getParentFile();
@@ -62,10 +75,19 @@ public class PluginWatcher implements Runnable {
             return;
         }
 
+        if (!scanning.compareAndSet(false, true)) {
+            if (verboseLogging) {
+                logger.fine("Plugin scan skipped because previous scan is still running.");
+            }
+            return;
+        }
+
         try {
             scanAndPatchPlugins();
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error in plugin watcher", e);
+        } finally {
+            scanning.set(false);
         }
     }
 
@@ -76,8 +98,7 @@ public class PluginWatcher implements Runnable {
             return;
         }
 
-        boolean verbose = config.getBoolean("logging.verbose", false);
-        if (verbose) {
+        if (verboseLogging) {
             logger.info("Scanning " + jarFiles.length + " plugin(s) in watch folder...");
         }
 
@@ -86,7 +107,8 @@ public class PluginWatcher implements Runnable {
             String fileName = jarFile.getName();
             long lastModified = jarFile.lastModified();
 
-            if (processedFiles.containsKey(fileName) && processedFiles.get(fileName) == lastModified) {
+            Long processedLastModified = processedFiles.get(fileName);
+            if (processedLastModified != null && processedLastModified == lastModified) {
                 continue; // Already processed this exact file
             }
 
@@ -95,7 +117,7 @@ public class PluginWatcher implements Runnable {
                     patchPlugin(jarFile);
                     processedFiles.put(fileName, lastModified);
                 } else {
-                    if (config.getBoolean("logging.log-skipped", true)) {
+                    if (logSkipped) {
                         logger.info("Skipped: " + fileName + " (already Folia-supported or blacklisted)");
                     }
                     skippedCount++;
@@ -112,18 +134,16 @@ public class PluginWatcher implements Runnable {
         String fileName = jarFile.getName();
 
         // Check blacklist
-        List<String> blacklist = config.getStringList("filters.blacklist");
-        for (String pattern : blacklist) {
+        for (Pattern pattern : blacklistPatterns) {
             if (matchesPattern(fileName, pattern)) {
                 return false;
             }
         }
 
         // Check whitelist (if not empty)
-        List<String> whitelist = config.getStringList("filters.whitelist");
-        if (!whitelist.isEmpty()) {
+        if (!whitelistPatterns.isEmpty()) {
             boolean inWhitelist = false;
-            for (String pattern : whitelist) {
+            for (Pattern pattern : whitelistPatterns) {
                 if (matchesPattern(fileName, pattern)) {
                     inWhitelist = true;
                     break;
@@ -135,7 +155,7 @@ public class PluginWatcher implements Runnable {
         }
 
         // Check if already Folia-supported
-        if (config.getBoolean("filters.skip-folia-supported", true)) {
+        if (skipFoliaSupported) {
             if (PluginPatcher.isFoliaSupported(jarFile)) {
                 return false;
             }
@@ -144,9 +164,17 @@ public class PluginWatcher implements Runnable {
         return true;
     }
 
-    private boolean matchesPattern(String fileName, String pattern) {
-        String regex = "\\Q" + pattern.replace("*", "\\E.*\\Q") + "\\E";
-        return fileName.matches(regex);
+    private List<Pattern> compilePatterns(List<String> wildcardPatterns) {
+        List<Pattern> patterns = new ArrayList<>(wildcardPatterns.size());
+        for (String pattern : wildcardPatterns) {
+            String regex = "\\Q" + pattern.replace("*", "\\E.*\\Q") + "\\E";
+            patterns.add(Pattern.compile(regex));
+        }
+        return patterns;
+    }
+
+    private boolean matchesPattern(String fileName, Pattern pattern) {
+        return pattern.matcher(fileName).matches();
     }
 
     private void patchPlugin(File jarFile) throws IOException {
@@ -162,7 +190,7 @@ public class PluginWatcher implements Runnable {
         if (config.getBoolean("advanced.create-backup", true)) {
             File backup = new File(backupFolder, fileName);
             Files.copy(jarFile.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            if (config.getBoolean("logging.verbose", false)) {
+            if (verboseLogging) {
                 logger.info("Created backup: " + backup.getName());
             }
         }
@@ -174,7 +202,7 @@ public class PluginWatcher implements Runnable {
         // Delete original if configured
         if (config.getBoolean("advanced.delete-original", false)) {
             if (jarFile.delete()) {
-                if (config.getBoolean("logging.verbose", false)) {
+                if (verboseLogging) {
                     logger.info("Deleted original: " + fileName);
                 }
             }
