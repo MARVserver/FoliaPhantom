@@ -29,11 +29,16 @@ By dynamically rewriting class files, Folia Phantom automatically converts threa
 ### 🚀 Getting Started
 
 #### Building from Source
-Requires JDK 17+ and Maven.
+Requires JDK 17+ and Maven or Gradle.
 ```bash
-mvn clean package
+# Maven
+mvn -f folia-phantom/pom.xml clean package
+
+# Gradle (wrapper bootstrap in binary-restricted environments)
+gradle wrapper --gradle-version 8.14.3 --no-validate-url
+./gradlew clean build
 ```
-Binary artifacts will be available in the `target` directories of each module.
+Binary artifacts will be available in each module's build output directories (`target` for Maven, `build/libs` for Gradle).
 
 #### Using the GUI
 1. Run `Folia-Phantom-GUI-1.0.0.jar`.
@@ -67,11 +72,16 @@ Binary artifacts will be available in the `target` directories of each module.
 ### 🚀 はじめかた
 
 #### ビルド
-JDK 17 以上と Maven が必要です。
+JDK 17 以上と Maven または Gradle が必要です。
 ```bash
-mvn clean package
+# Maven
+mvn -f folia-phantom/pom.xml clean package
+
+# Gradle（バイナリ制限環境向けに wrapper を先に生成）
+gradle wrapper --gradle-version 8.14.3 --no-validate-url
+./gradlew clean build
 ```
-ビルドされた JAR は各モジュールの `target` ディレクトリに生成されます。
+ビルドされた JAR は各モジュールの出力ディレクトリ（Maven は `target`、Gradle は `build/libs`）に生成されます。
 
 #### GUI の使用方法
 1. `Folia-Phantom-GUI-1.0.0.jar` を実行します。
