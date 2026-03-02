@@ -31,6 +31,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.*;
@@ -62,6 +63,8 @@ public class FoliaPhantomApp extends Application {
     private final AtomicInteger successCount = new AtomicInteger(0);
     private final AtomicInteger failureCount = new AtomicInteger(0);
     private final AtomicBoolean verboseLoggingEnabled = new AtomicBoolean(false);
+    private volatile ExecutorService currentExecutor;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Override
     public void start(Stage primaryStage) {
@@ -105,6 +108,11 @@ public class FoliaPhantomApp extends Application {
         primaryStage.show();
 
         logInfo("Folia Phantom Dashboard initialized.");
+    }
+
+    @Override
+    public void stop() {
+        shutdownExecutor();
     }
 
     private HBox buildTitleBar(Stage stage) {
@@ -267,6 +275,11 @@ public class FoliaPhantomApp extends Application {
     }
 
     private void openResultsDir() {
+        if (!Desktop.isDesktopSupported()) {
+            logError("Desktop integration is not supported on this environment.");
+            return;
+        }
+
         try {
             File dir = outputDirectory != null ? outputDirectory : new File(".");
             Desktop.getDesktop().open(dir);
@@ -276,14 +289,21 @@ public class FoliaPhantomApp extends Application {
     }
 
     private void runPatchProcess() {
+        if (!running.compareAndSet(false, true)) {
+            logError("Patch process is already running.");
+            return;
+        }
+
         if (selectedFiles.isEmpty()) {
             logError("Please add files first.");
+            running.set(false);
             return;
         }
 
         if (outputDirectory != null && !outputDirectory.exists()) {
             if (!outputDirectory.mkdirs()) {
                 logError("Failed to create output directory: " + outputDirectory.getAbsolutePath());
+                running.set(false);
                 return;
             }
         }
@@ -295,7 +315,8 @@ public class FoliaPhantomApp extends Application {
         int total = selectedFiles.size();
         AtomicInteger completed = new AtomicInteger(0);
 
-        ExecutorService executor = Executors.newFixedThreadPool(4);
+        ExecutorService executor = Executors.newFixedThreadPool(Math.min(4, Math.max(1, total)));
+        currentExecutor = executor;
         Logger patcherLogger = createLogger();
 
         logInfo("Starting process...");
@@ -316,8 +337,11 @@ public class FoliaPhantomApp extends Application {
                     Platform.runLater(() -> {
                         progressBar.setProgress((double) c / total);
                         progressLabel.setText("Processing " + c + "/" + total + "...");
-                        if (c == total)
+                        if (c == total) {
+                            running.set(false);
+                            currentExecutor = null;
                             finalizeProcess();
+                        }
                     });
                 }
             });
@@ -336,11 +360,12 @@ public class FoliaPhantomApp extends Application {
     private void setUIState(boolean enabled) {
         patchButton.setDisable(!enabled);
         fileListView.setDisable(!enabled);
+        openDirButton.setDisable(!enabled);
     }
 
     private void addFiles(List<File> files) {
         for (File f : files) {
-            if (f.getName().endsWith(".jar") && !selectedFiles.contains(f)) {
+            if (f.exists() && f.isFile() && f.canRead() && f.getName().endsWith(".jar") && !selectedFiles.contains(f)) {
                 selectedFiles.add(f);
                 fileListView.getItems().add(new FileItem(f));
             }
@@ -423,6 +448,25 @@ public class FoliaPhantomApp extends Application {
             }
         });
         return l;
+    }
+
+    private void shutdownExecutor() {
+        ExecutorService executor = currentExecutor;
+        if (executor == null) {
+            return;
+        }
+
+        executor.shutdownNow();
+        try {
+            if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+                logError("Background patch worker did not terminate cleanly.");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            currentExecutor = null;
+            running.set(false);
+        }
     }
 
     public static void main(String[] args) {
