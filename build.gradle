@@ -1,5 +1,6 @@
 plugins {
     id 'base'
+    id 'org.openjfx.javafxplugin' version '0.1.0' apply false
 }
 
 group = 'com.patch.foliaphantom'
@@ -56,9 +57,14 @@ project(':folia-phantom-plugin') {
 }
 
 project(':folia-phantom-gui') {
+    apply plugin: 'org.openjfx.javafxplugin'
+
+    javafx {
+        version = javafxVersion
+        modules = ['javafx.controls', 'javafx.fxml']
+    }
+
     dependencies {
         implementation project(':folia-phantom-core')
-        implementation "org.openjfx:javafx-controls:${javafxVersion}"
-        implementation "org.openjfx:javafx-fxml:${javafxVersion}"
     }
 }

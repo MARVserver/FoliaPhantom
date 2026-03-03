@@ -19,7 +19,6 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
-import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import com.patch.foliaphantom.core.PluginPatcher;
 
@@ -67,7 +66,7 @@ public class FoliaPhantomApp extends Application {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Override
-    public void start(Stage primaryStage) {
+    public void start(javafx.stage.Stage primaryStage) {
         primaryStage.initStyle(StageStyle.TRANSPARENT);
 
         StackPane root = new StackPane();
@@ -115,7 +114,7 @@ public class FoliaPhantomApp extends Application {
         shutdownExecutor();
     }
 
-    private HBox buildTitleBar(Stage stage) {
+    private HBox buildTitleBar(javafx.stage.Stage stage) {
         HBox titleBar = new HBox();
         titleBar.setId("title-bar");
         titleBar.setAlignment(Pos.CENTER_LEFT);
@@ -140,7 +139,7 @@ public class FoliaPhantomApp extends Application {
         return titleBar;
     }
 
-    private VBox buildSidebar(Stage stage) {
+    private VBox buildSidebar(javafx.stage.Stage stage) {
         VBox sidebar = new VBox(15);
         sidebar.setId("sidebar");
         sidebar.setPrefWidth(300);
@@ -181,7 +180,7 @@ public class FoliaPhantomApp extends Application {
         return sidebar;
     }
 
-    private VBox buildContentArea(Stage stage) {
+    private VBox buildContentArea(javafx.stage.Stage stage) {
         VBox content = new VBox(20);
         content.setId("content-area");
         content.setPadding(new Insets(30));
@@ -264,7 +263,7 @@ public class FoliaPhantomApp extends Application {
         return content;
     }
 
-    private void chooseOutputDir(Stage stage) {
+    private void chooseOutputDir(javafx.stage.Stage stage) {
         DirectoryChooser dc = new DirectoryChooser();
         dc.setTitle("Select Output Directory");
         File dir = dc.showDialog(stage);
@@ -373,7 +372,7 @@ public class FoliaPhantomApp extends Application {
         updateStats();
     }
 
-    private void selectFiles(Stage stage) {
+    private void selectFiles(javafx.stage.Stage stage) {
         FileChooser fc = new FileChooser();
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("JAR Files", "*.jar"));
         List<File> files = fc.showOpenMultipleDialog(stage);
