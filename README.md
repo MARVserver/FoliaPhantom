@@ -45,12 +45,6 @@ Binary artifacts will be available in each module's build output directories (`t
 2. Drag and drop your plugin JARs into the window.
 3. Click **Patch All Plugins**.
 
-#### Build as a Desktop Application (app-image)
-```bash
-mvn -f folia-phantom/pom.xml -pl folia-phantom-gui -am -Papp-image package
-```
-The generated application image is created under `folia-phantom/folia-phantom-gui/target/dist`.
-
 ---
 
 ## 日本語 (Japanese)
@@ -93,12 +87,6 @@ gradle wrapper --gradle-version 8.14.3 --no-validate-url
 1. `Folia-Phantom-GUI-1.0.0.jar` を実行します。
 2. プラグインの JAR ファイルをウィンドウにドラッグ＆ドロップします。
 3. **Patch All Plugins** をクリックします。
-
-#### デスクトップアプリ（app-image）としてビルド
-```bash
-mvn -f folia-phantom/pom.xml -pl folia-phantom-gui -am -Papp-image package
-```
-生成されたアプリケーションイメージは `folia-phantom/folia-phantom-gui/target/dist` に出力されます。
 
 ---
 
