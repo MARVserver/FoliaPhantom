@@ -263,7 +263,7 @@ public class FoliaPhantomApp extends Application {
         return content;
     }
 
-    private void chooseOutputDir(Stage stage) {
+    private void chooseOutputDir(javafx.stage.Stage stage) {
         DirectoryChooser dc = new DirectoryChooser();
         dc.setTitle("Select Output Directory");
         File dir = dc.showDialog(stage);
@@ -372,7 +372,7 @@ public class FoliaPhantomApp extends Application {
         updateStats();
     }
 
-    private void selectFiles(Stage stage) {
+    private void selectFiles(javafx.stage.Stage stage) {
         FileChooser fc = new FileChooser();
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("JAR Files", "*.jar"));
         List<File> files = fc.showOpenMultipleDialog(stage);
