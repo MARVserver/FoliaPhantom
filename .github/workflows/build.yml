@@ -1,15 +1,16 @@
-name: Build
+name: Build and Release
 
 on:
   push:
-    branches:
-      - main
-      - master
-  pull_request:
+    tags:
+      - 'v*'   # v1.0.0 のようなタグで実行
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # release 作成に必要
 
     steps:
       - name: Checkout repository
@@ -26,5 +27,10 @@ jobs:
         with:
           gradle-version: 8.14.3
 
-      - name: Build with Gradle
+      - name: Build
         run: gradle clean build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*.jar
