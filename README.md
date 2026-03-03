@@ -29,7 +29,7 @@ By dynamically rewriting class files, Folia Phantom automatically converts threa
 ### 🚀 Getting Started
 
 #### Building from Source
-Requires JDK 17+ and Maven or Gradle.
+Requires JDK 21+ and Maven or Gradle.
 ```bash
 # Maven
 mvn -f folia-phantom/pom.xml clean package
@@ -78,7 +78,7 @@ The generated application image is created under `folia-phantom/folia-phantom-gu
 ### 🚀 はじめかた
 
 #### ビルド
-JDK 17 以上と Maven または Gradle が必要です。
+JDK 21 以上と Maven または Gradle が必要です。
 ```bash
 # Maven
 mvn -f folia-phantom/pom.xml clean package
