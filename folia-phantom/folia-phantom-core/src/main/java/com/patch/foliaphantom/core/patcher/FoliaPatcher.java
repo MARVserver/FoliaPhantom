@@ -20,11 +20,15 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.scoreboard.Team;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.function.IntConsumer;
 import java.util.logging.Logger;
 
@@ -454,5 +458,84 @@ public final class FoliaPatcher {
                 task.cancel();
         });
         runningTasks.clear();
+    }
+
+    // --- Scoreboard Compatibility ---
+
+    public static Team registerNewTeamSafely(org.bukkit.scoreboard.Scoreboard scoreboard, String name) {
+        try {
+            return scoreboard.registerNewTeam(name);
+        } catch (IllegalArgumentException alreadyExists) {
+            Team existing = scoreboard.getTeam(name);
+            if (existing != null) {
+                return existing;
+            }
+            throw alreadyExists;
+        } catch (UnsupportedOperationException ex) {
+            LOGGER.warning("[FoliaPhantom] registerNewTeam is unsupported on this thread/context for team '" + name
+                    + "'. Falling back to a no-op team proxy.");
+            Team existing = scoreboard.getTeam(name);
+            if (existing != null) {
+                return existing;
+            }
+            return createNoOpTeam(scoreboard, name);
+        }
+    }
+
+    private static Team createNoOpTeam(org.bukkit.scoreboard.Scoreboard scoreboard, String teamName) {
+        InvocationHandler handler = new NoOpTeamInvocationHandler(scoreboard, teamName);
+        return (Team) Proxy.newProxyInstance(
+                Team.class.getClassLoader(),
+                new Class<?>[] { Team.class },
+                handler);
+    }
+
+    private static final class NoOpTeamInvocationHandler implements InvocationHandler {
+        private final org.bukkit.scoreboard.Scoreboard scoreboard;
+        private final String teamName;
+
+        private NoOpTeamInvocationHandler(org.bukkit.scoreboard.Scoreboard scoreboard, String teamName) {
+            this.scoreboard = scoreboard;
+            this.teamName = teamName;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            String methodName = method.getName();
+            if ("getName".equals(methodName)) {
+                return teamName;
+            }
+            if ("getScoreboard".equals(methodName)) {
+                return scoreboard;
+            }
+            if ("toString".equals(methodName)) {
+                return "NoOpTeam{" + teamName + "}";
+            }
+            if ("hashCode".equals(methodName)) {
+                return teamName.hashCode();
+            }
+            if ("equals".equals(methodName)) {
+                return proxy == (args != null && args.length == 1 ? args[0] : null);
+            }
+
+            Class<?> returnType = method.getReturnType();
+            if (returnType == Boolean.TYPE) {
+                return false;
+            }
+            if (returnType == Byte.TYPE || returnType == Short.TYPE || returnType == Integer.TYPE
+                    || returnType == Long.TYPE) {
+                return 0;
+            }
+            if (returnType == Float.TYPE) {
+                return 0f;
+            }
+            if (returnType == Double.TYPE) {
+                return 0d;
+            }
+            if (returnType == Character.TYPE) {
+                return '\0';
+            }
+            return null;
+        }
     }
 }

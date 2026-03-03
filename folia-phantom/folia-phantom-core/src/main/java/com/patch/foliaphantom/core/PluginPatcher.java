@@ -12,6 +12,7 @@ package com.patch.foliaphantom.core;
 import com.patch.foliaphantom.core.transformer.ClassTransformer;
 import com.patch.foliaphantom.core.transformer.ScanningClassVisitor;
 import com.patch.foliaphantom.core.transformer.impl.EntitySchedulerTransformer;
+import com.patch.foliaphantom.core.transformer.impl.ScoreboardClassTransformer;
 import com.patch.foliaphantom.core.transformer.impl.SchedulerClassTransformer;
 import com.patch.foliaphantom.core.transformer.impl.ThreadSafetyTransformer;
 import com.patch.foliaphantom.core.transformer.impl.WorldGenClassTransformer;
@@ -111,6 +112,7 @@ public class PluginPatcher {
         transformers.add(new WorldGenClassTransformer(logger));
         transformers.add(new EntitySchedulerTransformer(logger));
         transformers.add(new SchedulerClassTransformer(logger));
+        transformers.add(new ScoreboardClassTransformer(logger));
 
         logger.fine("Initialized PluginPatcher with " + transformers.size() + " transformers");
     }

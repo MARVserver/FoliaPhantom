@@ -50,7 +50,9 @@ public class ScanningClassVisitor extends ClassVisitor {
 
             // Define targets that trigger the 'needsPatching' flag
             if ("org/bukkit/scheduler/BukkitScheduler".equals(owner) ||
+                    "org/bukkit/craftbukkit/scheduler/CraftScheduler".equals(owner) ||
                     "org/bukkit/scheduler/BukkitRunnable".equals(owner) ||
+                    "org/bukkit/scoreboard/Scoreboard".equals(owner) ||
                     "org/bukkit/WorldCreator".equals(owner) ||
                     ("org/bukkit/block/Block".equals(owner) && name.equals("setType")) ||
                     ("org/bukkit/Bukkit".equals(owner) && name.equals("createWorld")) ||
