@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'   # v1.0.0 のようなセマンティックバージョンタグで実行
+
+jobs:
+  build-and-release:
+    name: Build and Release JARs
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # GitHub Release 作成に必要
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build all modules with Maven
+        run: mvn --batch-mode --no-transfer-progress package -DskipTests
+        working-directory: folia-phantom
+
+      - name: Collect release artifacts
+        id: artifacts
+        run: |
+          PLUGIN_JAR="folia-phantom/folia-phantom-plugin/target/Folia Phantom Plugin-${{ steps.version.outputs.VERSION }}.jar"
+          CLI_JAR="folia-phantom/folia-phantom-cli/target/Folia Phantom CLI-${{ steps.version.outputs.VERSION }}.jar"
+
+          # ファイルの存在確認
+          if [ ! -f "$PLUGIN_JAR" ]; then
+            echo "Plugin JAR not found: $PLUGIN_JAR"
+            ls folia-phantom/folia-phantom-plugin/target/
+            exit 1
+          fi
+          if [ ! -f "$CLI_JAR" ]; then
+            echo "CLI JAR not found: $CLI_JAR"
+            ls folia-phantom/folia-phantom-cli/target/
+            exit 1
+          fi
+
+          echo "PLUGIN_JAR=$PLUGIN_JAR" >> "$GITHUB_OUTPUT"
+          echo "CLI_JAR=$CLI_JAR" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "FoliaPhantom ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifacts.outputs.PLUGIN_JAR }}
+            ${{ steps.artifacts.outputs.CLI_JAR }}
+          body: |
+            ## FoliaPhantom ${{ github.ref_name }}
+
+            ### 同梱ファイル
+            | ファイル | 説明 |
+            |---------|------|
+            | `Folia Phantom Plugin-*.jar` | Bukkit/Paper サーバーに追加するプラグイン JAR |
+            | `Folia Phantom CLI-*.jar` | コマンドラインツール JAR（`java -jar` で実行） |
+
+            ### 使い方
+            **プラグインとして使用する場合:**
+            ```
+            plugins/ フォルダに Folia Phantom Plugin-*.jar を配置してサーバーを起動
+            ```
+
+            **CLIとして使用する場合:**
+            ```bash
+            java -jar "Folia Phantom CLI-${{ steps.version.outputs.VERSION }}.jar" <input.jar>
+            ```
