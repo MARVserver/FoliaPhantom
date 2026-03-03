@@ -35,23 +35,24 @@ jobs:
       - name: Collect release artifacts
         id: artifacts
         run: |
-          PLUGIN_JAR="folia-phantom/folia-phantom-plugin/target/Folia Phantom Plugin-${{ steps.version.outputs.VERSION }}.jar"
-          CLI_JAR="folia-phantom/folia-phantom-cli/target/Folia Phantom CLI-${{ steps.version.outputs.VERSION }}.jar"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          PLUGIN_JAR="folia-phantom/folia-phantom-plugin/target/Folia Phantom Plugin-$VERSION.jar"
+          CLI_JAR="folia-phantom/folia-phantom-cli/target/Folia Phantom CLI-$VERSION.jar"
+          GUI_JAR="folia-phantom/folia-phantom-gui/target/folia-phantom-gui-$VERSION.jar"
 
           # ファイルの存在確認
-          if [ ! -f "$PLUGIN_JAR" ]; then
-            echo "Plugin JAR not found: $PLUGIN_JAR"
-            ls folia-phantom/folia-phantom-plugin/target/
-            exit 1
-          fi
-          if [ ! -f "$CLI_JAR" ]; then
-            echo "CLI JAR not found: $CLI_JAR"
-            ls folia-phantom/folia-phantom-cli/target/
-            exit 1
-          fi
+          for f in "$PLUGIN_JAR" "$CLI_JAR" "$GUI_JAR"; do
+            if [ ! -f "$f" ]; then
+              echo "Required artifact not found: $f"
+              # デバッグ用にtargetの中身を表示
+              ls -R folia-phantom/*/target/
+              exit 1
+            fi
+          done
 
           echo "PLUGIN_JAR=$PLUGIN_JAR" >> "$GITHUB_OUTPUT"
           echo "CLI_JAR=$CLI_JAR" >> "$GITHUB_OUTPUT"
+          echo "GUI_JAR=$GUI_JAR" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -62,6 +63,7 @@ jobs:
           files: |
             ${{ steps.artifacts.outputs.PLUGIN_JAR }}
             ${{ steps.artifacts.outputs.CLI_JAR }}
+            ${{ steps.artifacts.outputs.GUI_JAR }}
           body: |
             ## FoliaPhantom ${{ github.ref_name }}
 
@@ -70,6 +72,7 @@ jobs:
             |---------|------|
             | `Folia Phantom Plugin-*.jar` | Bukkit/Paper サーバーに追加するプラグイン JAR |
             | `Folia Phantom CLI-*.jar` | コマンドラインツール JAR（`java -jar` で実行） |
+            | `folia-phantom-gui-*.jar` | GUI（画面）付きツール JAR（ダブルクリックまたは `java -jar` で実行） |
 
             ### 使い方
             **プラグインとして使用する場合:**
@@ -79,5 +82,10 @@ jobs:
 
             **CLIとして使用する場合:**
             ```bash
-            java -jar "Folia Phantom CLI-${{ steps.version.outputs.VERSION }}.jar" <input.jar>
+            java -jar "Folia Phantom CLI-$VERSION.jar" <input.jar>
+            ```
+
+            **GUIとして使用する場合:**
+            ```bash
+            java -jar "folia-phantom-gui-$VERSION.jar"
             ```
