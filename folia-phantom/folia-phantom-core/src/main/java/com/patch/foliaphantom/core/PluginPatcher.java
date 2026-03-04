@@ -375,13 +375,17 @@ public class PluginPatcher {
         try {
             ClassReader cr = new ClassReader(originalBytes);
 
-            // Fast-fail scan: check if this class needs patching
+            // Advanced scan: checks class hierarchy, field types AND method calls
             ScanningClassVisitor scanner = new ScanningClassVisitor();
             cr.accept(scanner, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
             if (!scanner.needsPatching()) {
                 return new ClassPatchResult(originalBytes, false);
             }
+
+            // Log the specific reasons this class requires transformation
+            logger.fine("[FoliaPhantom] Transforming " + className
+                    + " (reasons: " + scanner.getPatchReasons() + ")");
 
             // Full transformation needed
             ClassWriter cw = new ClassWriter(cr, 0);
@@ -394,7 +398,6 @@ public class PluginPatcher {
 
             cr.accept(cv, ClassReader.EXPAND_FRAMES);
 
-            logger.fine("[FoliaPhantom] Transformed: " + className);
             return new ClassPatchResult(cw.toByteArray(), true);
 
         } catch (Exception e) {
