@@ -6,7 +6,7 @@
     <parent>
         <groupId>com.patch.foliaphantom</groupId>
         <artifactId>folia-phantom</artifactId>
-        <version>1.4.0</version>
+        <version>1.4.1</version>
     </parent>
 
     <artifactId>folia-phantom-gui</artifactId>
