@@ -63,7 +63,8 @@ class ScanningClassVisitorTest {
         scanner.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null,
                 "java/lang/Object", null);
 
-        assertFalse(scanner.needsPatching());
+        assertTrue(scanner.needsPatching());
+        assertTrue(scanner.getPatchReasons().isEmpty());
     }
 
     @Test
@@ -106,7 +107,8 @@ class ScanningClassVisitorTest {
         ScanningClassVisitor scanner = new ScanningClassVisitor();
         scanner.visitField(Opcodes.ACC_PRIVATE, "name", "Ljava/lang/String;", null, null);
 
-        assertFalse(scanner.needsPatching());
+        assertTrue(scanner.needsPatching());
+        assertTrue(scanner.getPatchReasons().isEmpty());
     }
 
     // -------------------------------------------------------------------------
