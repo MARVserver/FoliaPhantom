@@ -59,8 +59,9 @@ public class SchedulerClassTransformer implements ClassTransformer {
                 }
             }
 
-            // Redirect BukkitRunnable instance method calls
-            if (opcode == Opcodes.INVOKEVIRTUAL && isBukkitRunnableInstanceMethod(name, desc)) {
+            // Redirect BukkitRunnable instance method calls, including super.* invocations
+            // compiled as INVOKESPECIAL in subclasses.
+            if (isRunnableInvokeOpcode(opcode) && isBukkitRunnableInstanceMethod(name, desc)) {
                 String newName = name + "_onRunnable";
                 String newDesc = "(Ljava/lang/Runnable;" + desc.substring(1);
                 super.visitMethodInsn(Opcodes.INVOKESTATIC, PATCHER, newName, newDesc, false);
@@ -96,6 +97,10 @@ public class SchedulerClassTransformer implements ClassTransformer {
                     ||
                     mk.equals(
                             "runTaskTimerAsynchronously(Lorg/bukkit/plugin/Plugin;JJ)Lorg/bukkit/scheduler/BukkitTask;");
+        }
+
+        private boolean isRunnableInvokeOpcode(int opcode) {
+            return opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESPECIAL;
         }
     }
 }

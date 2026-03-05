@@ -52,6 +52,26 @@ class SchedulerClassTransformerTest {
         assertFalse(capturingMethodVisitor.lastIsInterface);
     }
 
+    @Test
+    void redirectsBukkitRunnableSuperCallToFoliaPatcher() {
+        CapturingMethodVisitor capturingMethodVisitor = new CapturingMethodVisitor();
+        MethodVisitor mv = createVisitor(capturingMethodVisitor);
+
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL,
+                "org/bukkit/scheduler/BukkitRunnable",
+                "runTaskTimer",
+                "(Lorg/bukkit/plugin/Plugin;JJ)Lorg/bukkit/scheduler/BukkitTask;",
+                false);
+
+        assertEquals(Opcodes.INVOKESTATIC, capturingMethodVisitor.lastOpcode);
+        assertEquals("com/patch/foliaphantom/core/patcher/FoliaPatcher", capturingMethodVisitor.lastOwner);
+        assertEquals("runTaskTimer_onRunnable", capturingMethodVisitor.lastName);
+        assertEquals(
+                "(Ljava/lang/Runnable;Lorg/bukkit/plugin/Plugin;JJ)Lorg/bukkit/scheduler/BukkitTask;",
+                capturingMethodVisitor.lastDesc);
+        assertFalse(capturingMethodVisitor.lastIsInterface);
+    }
+
     private MethodVisitor createVisitor(CapturingMethodVisitor capturingMethodVisitor) {
         SchedulerClassTransformer transformer = new SchedulerClassTransformer(Logger.getLogger("test"));
         ClassVisitor cv = transformer.createVisitor(new ClassVisitor(Opcodes.ASM9) {
