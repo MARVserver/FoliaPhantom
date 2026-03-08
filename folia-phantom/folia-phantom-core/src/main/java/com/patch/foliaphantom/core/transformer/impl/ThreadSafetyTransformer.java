@@ -63,7 +63,26 @@ public class ThreadSafetyTransformer implements ClassTransformer {
                 }
             }
 
+            // Redirect Entity#teleport calls that are illegal in Folia region threads.
+            if (isEntityOwner(owner) && "teleport".equals(name)) {
+                if ("(Lorg/bukkit/Location;)Z".equals(desc)) {
+                    super.visitMethodInsn(Opcodes.INVOKESTATIC, PATCHER, "safeTeleport",
+                            "(Lorg/bukkit/entity/Entity;Lorg/bukkit/Location;)Z", false);
+                    return;
+                } else if ("(Lorg/bukkit/Location;Lorg/bukkit/event/player/PlayerTeleportEvent$TeleportCause;)Z"
+                        .equals(desc)) {
+                    super.visitMethodInsn(Opcodes.INVOKESTATIC, PATCHER, "safeTeleportWithCause",
+                            "(Lorg/bukkit/entity/Entity;Lorg/bukkit/Location;Lorg/bukkit/event/player/PlayerTeleportEvent$TeleportCause;)Z",
+                            false);
+                    return;
+                }
+            }
+
             super.visitMethodInsn(opcode, owner, name, desc, isInterface);
+        }
+
+        private static boolean isEntityOwner(String owner) {
+            return owner != null && owner.startsWith("org/bukkit/entity/");
         }
     }
 }
