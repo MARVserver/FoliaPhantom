@@ -1,0 +1,587 @@
+/*
+ * Folia Phantom - Runtime Patcher Bridge
+ * 
+ * This class provides the redirected method implementations that patched plugins
+ * call at runtime. It bridges standard Bukkit/Paper API calls to Folia-specific
+ * region-based or async schedulers.
+ * 
+ * Copyright (c) 2025 Marv
+ * Licensed under MARV License
+ */
+package com.patch.foliaphantom.core.patcher;
+
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.entity.Entity;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.scoreboard.Team;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.function.IntConsumer;
+import java.util.logging.Logger;
+
+/**
+ * Runtime bridge for Folia compatibility.
+ * 
+ * <p>
+ * This class is bundled into patched plugins and serves as the destination
+ * for redirected method calls. It handles the complexity of mapping global
+ * scheduler calls to Folia's region-based or asynchronous schedulers.
+ * </p>
+ */
+public final class FoliaPatcher {
+    private static final Logger LOGGER = Logger.getLogger("FoliaPhantom-Patcher");
+    private static final ExecutorService worldGenExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "FoliaPhantom-WorldGen-Worker");
+        t.setDaemon(true);
+        return t;
+    });
+    private static final AtomicInteger taskIdCounter = new AtomicInteger(1000000);
+    private static final Map<Integer, ScheduledTask> runningTasks = new ConcurrentHashMap<>();
+
+    /**
+     * The plugin instance used for scheduling.
+     * This is typically the patched plugin itself.
+     */
+    public static Plugin plugin;
+
+    private FoliaPatcher() {
+    }
+
+    // --- World Generation Wrappers ---
+
+    /**
+     * Wraps a ChunkGenerator to ensure Folia compatibility.
+     */
+    public static org.bukkit.generator.ChunkGenerator getDefaultWorldGenerator(Plugin plugin, String worldName,
+            String id) {
+        org.bukkit.generator.ChunkGenerator originalGenerator = plugin.getDefaultWorldGenerator(worldName, id);
+        if (originalGenerator == null)
+            return null;
+        return new FoliaChunkGenerator(originalGenerator);
+    }
+
+    /**
+     * Safely creates a world by offloading to a dedicated thread, as world creation
+     * in Folia/Paper can be sensitive to the calling thread context.
+     */
+    public static World createWorld(org.bukkit.WorldCreator creator) {
+        LOGGER.info("[FoliaPhantom] Intercepting world creation: " + creator.name());
+        Future<World> future = worldGenExecutor.submit(creator::createWorld);
+        try {
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            LOGGER.severe("[FoliaPhantom] Failed to create world '" + creator.name() + "': " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Internal wrapper for Folia's ChunkGenerator.
+     */
+    public static class FoliaChunkGenerator extends org.bukkit.generator.ChunkGenerator {
+        private final org.bukkit.generator.ChunkGenerator original;
+
+        public FoliaChunkGenerator(org.bukkit.generator.ChunkGenerator original) {
+            this.original = original;
+        }
+
+        @Override
+        public ChunkData generateChunkData(World world, java.util.Random random, int x, int z, BiomeGrid biome) {
+            return original.generateChunkData(world, random, x, z, biome);
+        }
+
+        @Override
+        public boolean shouldGenerateNoise() {
+            return original.shouldGenerateNoise();
+        }
+
+        @Override
+        public boolean shouldGenerateSurface() {
+            return original.shouldGenerateSurface();
+        }
+
+        @Override
+        public boolean shouldGenerateBedrock() {
+            return original.shouldGenerateBedrock();
+        }
+
+        @Override
+        public boolean shouldGenerateCaves() {
+            return original.shouldGenerateCaves();
+        }
+
+        @Override
+        public boolean shouldGenerateDecorations() {
+            return original.shouldGenerateDecorations();
+        }
+
+        @Override
+        public boolean shouldGenerateMobs() {
+            return original.shouldGenerateMobs();
+        }
+
+        @Override
+        public Location getFixedSpawnLocation(World world, java.util.Random random) {
+            return original.getFixedSpawnLocation(world, random);
+        }
+    }
+
+    // --- Helper Methods ---
+
+    private static Location getFallbackLocation() {
+        List<World> worlds = Bukkit.getWorlds();
+        if (worlds.isEmpty()) {
+            return null;
+        }
+        World mainWorld = worlds.get(0);
+        return mainWorld != null ? mainWorld.getSpawnLocation() : null;
+    }
+
+    private static Plugin resolvePlugin(Plugin provided) {
+        if (provided != null) {
+            return provided;
+        }
+        if (plugin != null) {
+            return plugin;
+        }
+        try {
+            Plugin resolved = JavaPlugin.getProvidingPlugin(FoliaPatcher.class);
+            plugin = resolved;
+            return resolved;
+        } catch (IllegalArgumentException e) {
+            LOGGER.warning("[FoliaPhantom] Unable to resolve providing plugin for scheduler operations.");
+            return null;
+        }
+    }
+
+    private static void cancelTaskById(int taskId) {
+        ScheduledTask task = runningTasks.remove(taskId);
+        if (task != null && !task.isCancelled()) {
+            task.cancel();
+        }
+    }
+
+    private static Runnable wrapRunnable(Runnable original, int taskId, boolean isRepeating) {
+        if (isRepeating)
+            return original;
+        return () -> {
+            try {
+                original.run();
+            } finally {
+                runningTasks.remove(taskId);
+            }
+        };
+    }
+
+    // --- Scheduler Redirections ---
+
+    public static BukkitTask runTask(BukkitScheduler ignored, Plugin plugin, Runnable runnable) {
+        int taskId = taskIdCounter.getAndIncrement();
+        Runnable wrapped = wrapRunnable(runnable, taskId, false);
+        Location loc = getFallbackLocation();
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, null);
+        }
+
+        ScheduledTask foliaTask = (loc != null)
+                ? Bukkit.getRegionScheduler().run(resolvedPlugin, loc, t -> wrapped.run())
+                : Bukkit.getGlobalRegionScheduler().run(resolvedPlugin, t -> wrapped.run());
+
+        runningTasks.put(taskId, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, true, foliaTask);
+    }
+
+    public static BukkitTask runTaskLater(BukkitScheduler ignored, Plugin plugin, Runnable runnable, long delay) {
+        int taskId = taskIdCounter.getAndIncrement();
+        Runnable wrapped = wrapRunnable(runnable, taskId, false);
+        Location loc = getFallbackLocation();
+        long finalDelay = Math.max(1, delay);
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule delayed task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, null);
+        }
+
+        ScheduledTask foliaTask = (loc != null)
+                ? Bukkit.getRegionScheduler().runDelayed(resolvedPlugin, loc, t -> wrapped.run(), finalDelay)
+                : Bukkit.getGlobalRegionScheduler().runDelayed(resolvedPlugin, t -> wrapped.run(), finalDelay);
+
+        runningTasks.put(taskId, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, true, foliaTask);
+    }
+
+    public static BukkitTask runTaskTimer(BukkitScheduler ignored, Plugin plugin, Runnable runnable, long delay,
+            long period) {
+        int taskId = taskIdCounter.getAndIncrement();
+        Location loc = getFallbackLocation();
+        long d = Math.max(1, delay);
+        long p = Math.max(1, period);
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule repeating task: no plugin instance available.");
+            runnable.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, true, null);
+        }
+
+        ScheduledTask foliaTask = (loc != null)
+                ? Bukkit.getRegionScheduler().runAtFixedRate(resolvedPlugin, loc, t -> runnable.run(), d, p)
+                : Bukkit.getGlobalRegionScheduler().runAtFixedRate(resolvedPlugin, t -> runnable.run(), d, p);
+
+        runningTasks.put(taskId, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, true, foliaTask);
+    }
+
+    public static BukkitTask runTaskAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable) {
+        int taskId = taskIdCounter.getAndIncrement();
+        Runnable wrapped = wrapRunnable(runnable, taskId, false);
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule async task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, null);
+        }
+
+        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runNow(resolvedPlugin, t -> wrapped.run());
+        runningTasks.put(taskId, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, false, foliaTask);
+    }
+
+    public static BukkitTask runTaskLaterAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable,
+            long delay) {
+        int taskId = taskIdCounter.getAndIncrement();
+        Runnable wrapped = wrapRunnable(runnable, taskId, false);
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule async delayed task: no plugin instance available.");
+            wrapped.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, null);
+        }
+
+        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runDelayed(resolvedPlugin, t -> wrapped.run(), delay * 50,
+                TimeUnit.MILLISECONDS);
+        runningTasks.put(taskId, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, false, foliaTask);
+    }
+
+    public static BukkitTask runTaskTimerAsynchronously(BukkitScheduler ignored, Plugin plugin, Runnable runnable,
+            long delay, long period) {
+        int taskId = taskIdCounter.getAndIncrement();
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.severe("[FoliaPhantom] Cannot schedule async repeating task: no plugin instance available.");
+            runnable.run();
+            return new FoliaBukkitTask(taskId, plugin, FoliaPatcher::cancelTaskById, false, null);
+        }
+
+        ScheduledTask foliaTask = Bukkit.getAsyncScheduler().runAtFixedRate(resolvedPlugin, t -> runnable.run(),
+                delay * 50, period * 50, TimeUnit.MILLISECONDS);
+        runningTasks.put(taskId, foliaTask);
+        return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, false, foliaTask);
+    }
+
+    // --- BukkitRunnable Instance Method Wrappers ---
+
+    public static BukkitTask runTask_onRunnable(Runnable runnable, Plugin plugin) {
+        return runTask(null, plugin, runnable);
+    }
+
+    public static BukkitTask runTaskLater_onRunnable(Runnable runnable, Plugin plugin, long delay) {
+        return runTaskLater(null, plugin, runnable, delay);
+    }
+
+    public static BukkitTask runTaskTimer_onRunnable(Runnable runnable, Plugin plugin, long delay, long period) {
+        return runTaskTimer(null, plugin, runnable, delay, period);
+    }
+
+    public static BukkitTask runTaskAsynchronously_onRunnable(Runnable runnable, Plugin plugin) {
+        return runTaskAsynchronously(null, plugin, runnable);
+    }
+
+    public static BukkitTask runTaskLaterAsynchronously_onRunnable(Runnable runnable, Plugin plugin, long delay) {
+        return runTaskLaterAsynchronously(null, plugin, runnable, delay);
+    }
+
+    public static BukkitTask runTaskTimerAsynchronously_onRunnable(Runnable runnable, Plugin plugin, long delay,
+            long period) {
+        return runTaskTimerAsynchronously(null, plugin, runnable, delay, period);
+    }
+
+    /**
+     * Implementation of BukkitTask for Folia.
+     */
+    public static final class FoliaBukkitTask implements BukkitTask {
+        private final int taskId;
+        private final Plugin owner;
+        private final IntConsumer cancellationCallback;
+        private final boolean isSync;
+        private final ScheduledTask underlyingTask;
+
+        public FoliaBukkitTask(int taskId, Plugin owner, IntConsumer cc, boolean isSync, ScheduledTask underlyingTask) {
+            this.taskId = taskId;
+            this.owner = owner;
+            this.cancellationCallback = cc;
+            this.isSync = isSync;
+            this.underlyingTask = underlyingTask;
+        }
+
+        @Override
+        public int getTaskId() {
+            return taskId;
+        }
+
+        @Override
+        public Plugin getOwner() {
+            return owner;
+        }
+
+        @Override
+        public boolean isSync() {
+            return isSync;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            if (underlyingTask == null) {
+                return true;
+            }
+            return underlyingTask.isCancelled();
+        }
+
+        @Override
+        public void cancel() {
+            if (underlyingTask == null) {
+                return;
+            }
+            if (!isCancelled()) {
+                cancellationCallback.accept(this.taskId);
+            }
+        }
+    }
+
+    // --- Thread-Safe Block Operations ---
+
+    public static void safeSetType(Block block, org.bukkit.Material material) {
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+        if (Bukkit.isPrimaryThread()) {
+            block.setType(material);
+        } else {
+            if (resolvedPlugin == null) {
+                LOGGER.severe("[FoliaPhantom] Cannot schedule block update: no plugin instance available.");
+                return;
+            }
+            Bukkit.getRegionScheduler().run(resolvedPlugin, block.getLocation(), task -> block.setType(material));
+        }
+    }
+
+    public static void safeSetTypeWithPhysics(Block block, org.bukkit.Material material, boolean applyPhysics) {
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+        if (Bukkit.isPrimaryThread()) {
+            block.setType(material, applyPhysics);
+        } else {
+            if (resolvedPlugin == null) {
+                LOGGER.severe("[FoliaPhantom] Cannot schedule block update: no plugin instance available.");
+                return;
+            }
+            Bukkit.getRegionScheduler().run(resolvedPlugin, block.getLocation(),
+                    task -> block.setType(material, applyPhysics));
+        }
+    }
+
+
+    public static boolean safeTeleport(Entity entity, Location location) {
+        if (entity == null || location == null) {
+            return false;
+        }
+        try {
+            return entity.teleport(location);
+        } catch (UnsupportedOperationException ex) {
+            try {
+                return entity.teleportAsync(location).join();
+            } catch (CompletionException completionEx) {
+                Throwable cause = completionEx.getCause();
+                LOGGER.warning("[FoliaPhantom] teleportAsync failed for entity " + entity.getUniqueId() + ": "
+                        + (cause != null ? cause.getMessage() : completionEx.getMessage()));
+                return false;
+            } catch (Exception asyncEx) {
+                LOGGER.warning("[FoliaPhantom] teleportAsync failed for entity " + entity.getUniqueId() + ": "
+                        + asyncEx.getMessage());
+                return false;
+            }
+        }
+    }
+
+    public static boolean safeTeleportWithCause(Entity entity, Location location,
+            org.bukkit.event.player.PlayerTeleportEvent.TeleportCause cause) {
+        if (entity == null || location == null) {
+            return false;
+        }
+        try {
+            return entity.teleport(location, cause);
+        } catch (UnsupportedOperationException ex) {
+            try {
+                return entity.teleportAsync(location, cause).join();
+            } catch (CompletionException completionEx) {
+                Throwable rootCause = completionEx.getCause();
+                LOGGER.warning("[FoliaPhantom] teleportAsync(cause) failed for entity " + entity.getUniqueId() + ": "
+                        + (rootCause != null ? rootCause.getMessage() : completionEx.getMessage()));
+                return false;
+            } catch (Exception asyncEx) {
+                LOGGER.warning("[FoliaPhantom] teleportAsync(cause) failed for entity " + entity.getUniqueId() + ": "
+                        + asyncEx.getMessage());
+                return false;
+            }
+        }
+    }
+
+    // --- Legacy / Int-returning Method Mappings ---
+
+    public static int scheduleSyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r, long d) {
+        return runTaskLater(s, p, r, d).getTaskId();
+    }
+
+    public static int scheduleSyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r) {
+        return runTask(s, p, r).getTaskId();
+    }
+
+    public static int scheduleSyncRepeatingTask(BukkitScheduler s, Plugin p, Runnable r, long d, long pr) {
+        return runTaskTimer(s, p, r, d, pr).getTaskId();
+    }
+
+    public static int scheduleAsyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r, long d) {
+        return runTaskLaterAsynchronously(s, p, r, d).getTaskId();
+    }
+
+    public static int scheduleAsyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r) {
+        return runTaskAsynchronously(s, p, r).getTaskId();
+    }
+
+    public static int scheduleAsyncRepeatingTask(BukkitScheduler s, Plugin p, Runnable r, long d, long pr) {
+        return runTaskTimerAsynchronously(s, p, r, d, pr).getTaskId();
+    }
+
+    public static void cancelTask(BukkitScheduler ignored, int taskId) {
+        cancelTaskById(taskId);
+    }
+
+    public static void cancelTasks(BukkitScheduler ignored, Plugin plugin) {
+        runningTasks.entrySet().removeIf(entry -> {
+            ScheduledTask task = entry.getValue();
+            if (task.getOwningPlugin().equals(plugin)) {
+                if (!task.isCancelled())
+                    task.cancel();
+                return true;
+            }
+            return false;
+        });
+    }
+
+    public static void cancelAllTasks() {
+        runningTasks.values().forEach(task -> {
+            if (!task.isCancelled())
+                task.cancel();
+        });
+        runningTasks.clear();
+    }
+
+    // --- Scoreboard Compatibility ---
+
+    public static Team registerNewTeamSafely(org.bukkit.scoreboard.Scoreboard scoreboard, String name) {
+        try {
+            return scoreboard.registerNewTeam(name);
+        } catch (IllegalArgumentException alreadyExists) {
+            Team existing = scoreboard.getTeam(name);
+            if (existing != null) {
+                return existing;
+            }
+            throw alreadyExists;
+        } catch (UnsupportedOperationException ex) {
+            LOGGER.warning("[FoliaPhantom] registerNewTeam is unsupported on this thread/context for team '" + name
+                    + "'. Falling back to a no-op team proxy.");
+            Team existing = scoreboard.getTeam(name);
+            if (existing != null) {
+                return existing;
+            }
+            return createNoOpTeam(scoreboard, name);
+        }
+    }
+
+    private static Team createNoOpTeam(org.bukkit.scoreboard.Scoreboard scoreboard, String teamName) {
+        InvocationHandler handler = new NoOpTeamInvocationHandler(scoreboard, teamName);
+        return (Team) Proxy.newProxyInstance(
+                Team.class.getClassLoader(),
+                new Class<?>[] { Team.class },
+                handler);
+    }
+
+    private static final class NoOpTeamInvocationHandler implements InvocationHandler {
+        private final org.bukkit.scoreboard.Scoreboard scoreboard;
+        private final String teamName;
+
+        private NoOpTeamInvocationHandler(org.bukkit.scoreboard.Scoreboard scoreboard, String teamName) {
+            this.scoreboard = scoreboard;
+            this.teamName = teamName;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            String methodName = method.getName();
+            if ("getName".equals(methodName)) {
+                return teamName;
+            }
+            if ("getScoreboard".equals(methodName)) {
+                return scoreboard;
+            }
+            if ("toString".equals(methodName)) {
+                return "NoOpTeam{" + teamName + "}";
+            }
+            if ("hashCode".equals(methodName)) {
+                return teamName.hashCode();
+            }
+            if ("equals".equals(methodName)) {
+                return proxy == (args != null && args.length == 1 ? args[0] : null);
+            }
+
+            Class<?> returnType = method.getReturnType();
+            if (returnType == Boolean.TYPE) {
+                return false;
+            }
+            if (returnType == Byte.TYPE || returnType == Short.TYPE || returnType == Integer.TYPE
+                    || returnType == Long.TYPE) {
+                return 0;
+            }
+            if (returnType == Float.TYPE) {
+                return 0f;
+            }
+            if (returnType == Double.TYPE) {
+                return 0d;
+            }
+            if (returnType == Character.TYPE) {
+                return '\0';
+            }
+            return null;
+        }
+    }
+}
