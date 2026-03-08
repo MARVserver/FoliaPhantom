@@ -410,6 +410,52 @@ public final class FoliaPatcher {
         }
     }
 
+
+    public static boolean safeTeleport(Entity entity, Location location) {
+        if (entity == null || location == null) {
+            return false;
+        }
+        try {
+            return entity.teleport(location);
+        } catch (UnsupportedOperationException ex) {
+            try {
+                return entity.teleportAsync(location).join();
+            } catch (CompletionException completionEx) {
+                Throwable cause = completionEx.getCause();
+                LOGGER.warning("[FoliaPhantom] teleportAsync failed for entity " + entity.getUniqueId() + ": "
+                        + (cause != null ? cause.getMessage() : completionEx.getMessage()));
+                return false;
+            } catch (Exception asyncEx) {
+                LOGGER.warning("[FoliaPhantom] teleportAsync failed for entity " + entity.getUniqueId() + ": "
+                        + asyncEx.getMessage());
+                return false;
+            }
+        }
+    }
+
+    public static boolean safeTeleportWithCause(Entity entity, Location location,
+            org.bukkit.event.player.PlayerTeleportEvent.TeleportCause cause) {
+        if (entity == null || location == null) {
+            return false;
+        }
+        try {
+            return entity.teleport(location, cause);
+        } catch (UnsupportedOperationException ex) {
+            try {
+                return entity.teleportAsync(location, cause).join();
+            } catch (CompletionException completionEx) {
+                Throwable rootCause = completionEx.getCause();
+                LOGGER.warning("[FoliaPhantom] teleportAsync(cause) failed for entity " + entity.getUniqueId() + ": "
+                        + (rootCause != null ? rootCause.getMessage() : completionEx.getMessage()));
+                return false;
+            } catch (Exception asyncEx) {
+                LOGGER.warning("[FoliaPhantom] teleportAsync(cause) failed for entity " + entity.getUniqueId() + ": "
+                        + asyncEx.getMessage());
+                return false;
+            }
+        }
+    }
+
     // --- Legacy / Int-returning Method Mappings ---
 
     public static int scheduleSyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r, long d) {
