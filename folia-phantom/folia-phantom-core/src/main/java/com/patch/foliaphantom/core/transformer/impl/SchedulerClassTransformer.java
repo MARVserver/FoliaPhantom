@@ -74,7 +74,8 @@ public class SchedulerClassTransformer implements ClassTransformer {
         private boolean isSchedulerMethod(String name, String desc) {
             String mk = name + desc;
             return mk.startsWith("runTask") || mk.startsWith("scheduleSync") ||
-                    mk.startsWith("scheduleAsync") || mk.startsWith("cancel");
+                    mk.startsWith("scheduleAsync") || mk.startsWith("cancel") ||
+                    mk.equals("callSyncMethod(Lorg/bukkit/plugin/Plugin;Ljava/util/concurrent/Callable;)Ljava/util/concurrent/Future;");
         }
 
         private boolean isBukkitSchedulerOwner(String owner) {

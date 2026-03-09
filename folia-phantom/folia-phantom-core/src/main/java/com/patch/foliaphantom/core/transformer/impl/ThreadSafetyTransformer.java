@@ -63,6 +63,16 @@ public class ThreadSafetyTransformer implements ClassTransformer {
                 }
             }
 
+            // Redirect Bukkit.dispatchCommand static helper to a Folia-safe bridge.
+            if (opcode == Opcodes.INVOKESTATIC
+                    && "org/bukkit/Bukkit".equals(owner)
+                    && "dispatchCommand".equals(name)
+                    && "(Lorg/bukkit/command/CommandSender;Ljava/lang/String;)Z".equals(desc)) {
+                super.visitMethodInsn(Opcodes.INVOKESTATIC, PATCHER, "safeDispatchCommand",
+                        "(Lorg/bukkit/command/CommandSender;Ljava/lang/String;)Z", false);
+                return;
+            }
+
             // Redirect Entity#teleport calls that are illegal in Folia region threads.
             if (isEntityOwner(owner) && "teleport".equals(name)) {
                 if ("(Lorg/bukkit/Location;)Z".equals(desc)) {
