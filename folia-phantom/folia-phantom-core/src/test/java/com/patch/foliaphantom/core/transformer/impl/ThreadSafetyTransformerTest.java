@@ -13,6 +13,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class ThreadSafetyTransformerTest {
 
     @Test
+    void redirectsBukkitDispatchCommandCallToFoliaPatcher() {
+        CapturingMethodVisitor capturingMethodVisitor = new CapturingMethodVisitor();
+        MethodVisitor mv = createVisitor(capturingMethodVisitor);
+
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC,
+                "org/bukkit/Bukkit",
+                "dispatchCommand",
+                "(Lorg/bukkit/command/CommandSender;Ljava/lang/String;)Z",
+                false);
+
+        assertEquals(Opcodes.INVOKESTATIC, capturingMethodVisitor.lastOpcode);
+        assertEquals("com/patch/foliaphantom/core/patcher/FoliaPatcher", capturingMethodVisitor.lastOwner);
+        assertEquals("safeDispatchCommand", capturingMethodVisitor.lastName);
+        assertEquals("(Lorg/bukkit/command/CommandSender;Ljava/lang/String;)Z", capturingMethodVisitor.lastDesc);
+        assertFalse(capturingMethodVisitor.lastIsInterface);
+    }
+
+    @Test
     void redirectsEntityTeleportCallToFoliaPatcher() {
         CapturingMethodVisitor capturingMethodVisitor = new CapturingMethodVisitor();
         MethodVisitor mv = createVisitor(capturingMethodVisitor);

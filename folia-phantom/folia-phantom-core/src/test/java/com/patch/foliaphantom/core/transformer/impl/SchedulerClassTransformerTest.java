@@ -53,6 +53,26 @@ class SchedulerClassTransformerTest {
     }
 
     @Test
+    void redirectsCallSyncMethodToFoliaPatcher() {
+        CapturingMethodVisitor capturingMethodVisitor = new CapturingMethodVisitor();
+        MethodVisitor mv = createVisitor(capturingMethodVisitor);
+
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE,
+                "org/bukkit/scheduler/BukkitScheduler",
+                "callSyncMethod",
+                "(Lorg/bukkit/plugin/Plugin;Ljava/util/concurrent/Callable;)Ljava/util/concurrent/Future;",
+                true);
+
+        assertEquals(Opcodes.INVOKESTATIC, capturingMethodVisitor.lastOpcode);
+        assertEquals("com/patch/foliaphantom/core/patcher/FoliaPatcher", capturingMethodVisitor.lastOwner);
+        assertEquals("callSyncMethod", capturingMethodVisitor.lastName);
+        assertEquals(
+                "(Lorg/bukkit/scheduler/BukkitScheduler;Lorg/bukkit/plugin/Plugin;Ljava/util/concurrent/Callable;)Ljava/util/concurrent/Future;",
+                capturingMethodVisitor.lastDesc);
+        assertFalse(capturingMethodVisitor.lastIsInterface);
+    }
+
+    @Test
     void redirectsBukkitRunnableSuperCallToFoliaPatcher() {
         CapturingMethodVisitor capturingMethodVisitor = new CapturingMethodVisitor();
         MethodVisitor mv = createVisitor(capturingMethodVisitor);

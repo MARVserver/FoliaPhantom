@@ -15,6 +15,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -300,6 +301,60 @@ public final class FoliaPatcher {
                 delay * 50, period * 50, TimeUnit.MILLISECONDS);
         runningTasks.put(taskId, foliaTask);
         return new FoliaBukkitTask(taskId, resolvedPlugin, FoliaPatcher::cancelTaskById, false, foliaTask);
+    }
+
+    public static boolean safeDispatchCommand(CommandSender sender, String commandLine) {
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+
+        if (resolvedPlugin == null) {
+            LOGGER.warning("[FoliaPhantom] dispatchCommand fallback: no plugin instance available, running direct call.");
+            return Bukkit.dispatchCommand(sender, commandLine);
+        }
+
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        Bukkit.getGlobalRegionScheduler().execute(resolvedPlugin, () -> {
+            try {
+                result.complete(Bukkit.dispatchCommand(sender, commandLine));
+            } catch (Throwable throwable) {
+                result.completeExceptionally(throwable);
+            }
+        });
+
+        try {
+            return result.get();
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while dispatching command on Folia scheduler.",
+                    interruptedException);
+        } catch (ExecutionException executionException) {
+            Throwable cause = executionException.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new RuntimeException("Failed to dispatch command on Folia scheduler.", cause);
+        }
+    }
+
+    public static <T> Future<T> callSyncMethod(BukkitScheduler ignored, Plugin plugin, Callable<T> callable) {
+        Plugin resolvedPlugin = resolvePlugin(plugin);
+        CompletableFuture<T> result = new CompletableFuture<>();
+
+        Runnable runner = () -> {
+            try {
+                result.complete(callable.call());
+            } catch (Throwable throwable) {
+                result.completeExceptionally(throwable);
+            }
+        };
+
+        if (resolvedPlugin == null) {
+            LOGGER.warning("[FoliaPhantom] callSyncMethod fallback: no plugin instance available, executing immediately.");
+            runner.run();
+            return result;
+        }
+
+        Bukkit.getGlobalRegionScheduler().execute(resolvedPlugin, runner);
+        return result;
     }
 
     // --- BukkitRunnable Instance Method Wrappers ---
