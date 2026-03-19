@@ -1,5 +1,5 @@
 # Folia Phantom 👻
-
+# ⚠Before transitioning to the next-generation project
 [English](#english) | [日本語 (Japanese)](#日本語-japanese)
 
 ---
