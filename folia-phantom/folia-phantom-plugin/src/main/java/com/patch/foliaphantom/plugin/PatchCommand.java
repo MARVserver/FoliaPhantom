@@ -64,7 +64,7 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
     }
 
     private void listPlugins(CommandSender sender) {
-        File serverRoot = plugin.getDataFolder().getParentFile().getParentFile();
+        File serverRoot = resolveServerRoot();
         File watchFolder = new File(serverRoot,
                 plugin.getConfig().getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
 
@@ -117,7 +117,7 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.WHITE + "Skipped: " + ChatColor.YELLOW + stats.get("skipped"));
         sender.sendMessage(ChatColor.WHITE + "Failed: " + ChatColor.RED + stats.get("failed"));
 
-        File serverRoot = plugin.getDataFolder().getParentFile().getParentFile();
+        File serverRoot = resolveServerRoot();
         File watchFolder = new File(serverRoot,
                 plugin.getConfig().getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
         File outputFolder = new File(serverRoot,
@@ -128,7 +128,7 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
     }
 
     private void patchPlugin(CommandSender sender, String pluginIdentifier) {
-        File serverRoot = plugin.getDataFolder().getParentFile().getParentFile();
+        File serverRoot = resolveServerRoot();
         File watchFolder = new File(serverRoot,
                 plugin.getConfig().getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
         File outputFolder = new File(serverRoot,
@@ -212,7 +212,7 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
             List<String> completions = new ArrayList<>(Arrays.asList("list", "status", "reload"));
 
             // Add plugin names
-            File serverRoot = plugin.getDataFolder().getParentFile().getParentFile();
+            File serverRoot = resolveServerRoot();
             File watchFolder = new File(serverRoot,
                     plugin.getConfig().getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
 
@@ -237,5 +237,23 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         }
 
         return Collections.emptyList();
+    }
+
+    private File resolveServerRoot() {
+        File dataFolder = plugin.getDataFolder();
+        File pluginsFolder = dataFolder.getParentFile();
+        if (pluginsFolder == null) {
+            plugin.getLogger()
+                    .warning("Failed to resolve plugins folder from data folder. Falling back to data folder.");
+            return dataFolder;
+        }
+
+        File serverRoot = pluginsFolder.getParentFile();
+        if (serverRoot == null) {
+            plugin.getLogger()
+                    .warning("Failed to resolve server root from plugins folder. Falling back to plugins folder.");
+            return pluginsFolder;
+        }
+        return serverRoot;
     }
 }

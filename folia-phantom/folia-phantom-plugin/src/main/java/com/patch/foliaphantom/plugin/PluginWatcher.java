@@ -44,7 +44,7 @@ public class PluginWatcher implements Runnable {
         this.whitelistPatterns = compilePatterns(config.getStringList("filters.whitelist"));
 
         // Initialize folders
-        File serverRoot = plugin.getDataFolder().getParentFile().getParentFile();
+        File serverRoot = resolveServerRoot(plugin);
         this.watchFolder = new File(serverRoot,
                 config.getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
         this.outputFolder = new File(serverRoot, config.getString("auto-patch.output-folder", "plugins/patched"));
@@ -228,5 +228,21 @@ public class PluginWatcher implements Runnable {
         patchedCount = 0;
         skippedCount = 0;
         failedCount = 0;
+    }
+
+    private File resolveServerRoot(FoliaPhantomPlugin plugin) {
+        File dataFolder = plugin.getDataFolder();
+        File pluginsFolder = dataFolder.getParentFile();
+        if (pluginsFolder == null) {
+            logger.warning("Failed to resolve plugins folder from data folder. Falling back to data folder.");
+            return dataFolder;
+        }
+
+        File serverRoot = pluginsFolder.getParentFile();
+        if (serverRoot == null) {
+            logger.warning("Failed to resolve server root from plugins folder. Falling back to plugins folder.");
+            return pluginsFolder;
+        }
+        return serverRoot;
     }
 }
