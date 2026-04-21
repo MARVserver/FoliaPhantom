@@ -2,6 +2,7 @@ package com.patch.foliaphantom.plugin;
 
 import com.patch.foliaphantom.core.patcher.FoliaPatcher;
 import org.bukkit.Bukkit;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -10,7 +11,6 @@ import java.util.concurrent.TimeUnit;
 public class FoliaPhantomPlugin extends JavaPlugin {
 
     private PluginWatcher watcher;
-    private int watcherTaskId = -1;
 
     @Override
     public void onEnable() {
@@ -40,8 +40,14 @@ public class FoliaPhantomPlugin extends JavaPlugin {
 
         // Register commands
         PatchCommand patchCommand = new PatchCommand(this);
-        getCommand("foliapatch").setExecutor(patchCommand);
-        getCommand("foliapatch").setTabCompleter(patchCommand);
+        PluginCommand foliaPatchCommand = getCommand("foliapatch");
+        if (foliaPatchCommand == null) {
+            getLogger().severe("Command 'foliapatch' not found in plugin.yml. Disabling plugin for safety.");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
+        foliaPatchCommand.setExecutor(patchCommand);
+        foliaPatchCommand.setTabCompleter(patchCommand);
 
         // Log configuration
         logConfiguration();
@@ -52,10 +58,8 @@ public class FoliaPhantomPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         // Stop the watcher task
-        if (watcherTaskId != -1) {
-            Bukkit.getAsyncScheduler().cancelTasks(this);
-            getLogger().info("Plugin watcher stopped.");
-        }
+        Bukkit.getAsyncScheduler().cancelTasks(this);
+        getLogger().info("Plugin watcher stopped.");
 
         // Print statistics
         if (watcher != null) {
@@ -78,7 +82,7 @@ public class FoliaPhantomPlugin extends JavaPlugin {
     }
 
     private void setupFolders() {
-        File serverRoot = getDataFolder().getParentFile().getParentFile();
+        File serverRoot = resolveServerRoot();
         File watchFolder = new File(serverRoot,
                 getConfig().getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
         File outputFolder = new File(serverRoot, getConfig().getString("auto-patch.output-folder", "plugins/patched"));
@@ -120,7 +124,7 @@ public class FoliaPhantomPlugin extends JavaPlugin {
     }
 
     private void logConfiguration() {
-        File serverRoot = getDataFolder().getParentFile().getParentFile();
+        File serverRoot = resolveServerRoot();
         File watchFolder = new File(serverRoot, getConfig().getString("auto-patch.watch-folder"));
         File outputFolder = new File(serverRoot, getConfig().getString("auto-patch.output-folder"));
 
@@ -140,5 +144,21 @@ public class FoliaPhantomPlugin extends JavaPlugin {
 
     public PluginWatcher getWatcher() {
         return watcher;
+    }
+
+    private File resolveServerRoot() {
+        File dataFolder = getDataFolder();
+        File pluginsFolder = dataFolder.getParentFile();
+        if (pluginsFolder == null) {
+            getLogger().warning("Failed to resolve plugins folder from data folder. Falling back to data folder.");
+            return dataFolder;
+        }
+
+        File serverRoot = pluginsFolder.getParentFile();
+        if (serverRoot == null) {
+            getLogger().warning("Failed to resolve server root from plugins folder. Falling back to plugins folder.");
+            return pluginsFolder;
+        }
+        return serverRoot;
     }
 }

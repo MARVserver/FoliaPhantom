@@ -88,6 +88,14 @@ public class ThreadSafetyTransformer implements ClassTransformer {
                 }
             }
 
+            // Redirect Entity#getCustomName to avoid async thread-check violations.
+            if (isEntityOwner(owner) && "getCustomName".equals(name)
+                    && "()Ljava/lang/String;".equals(desc)) {
+                super.visitMethodInsn(Opcodes.INVOKESTATIC, PATCHER, "safeGetCustomName",
+                        "(Lorg/bukkit/entity/Entity;)Ljava/lang/String;", false);
+                return;
+            }
+
             super.visitMethodInsn(opcode, owner, name, desc, isInterface);
         }
 

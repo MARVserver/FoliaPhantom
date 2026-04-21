@@ -68,6 +68,24 @@ class ThreadSafetyTransformerTest {
         assertFalse(capturingMethodVisitor.lastIsInterface);
     }
 
+    @Test
+    void redirectsEntityGetCustomNameCallToFoliaPatcher() {
+        CapturingMethodVisitor capturingMethodVisitor = new CapturingMethodVisitor();
+        MethodVisitor mv = createVisitor(capturingMethodVisitor);
+
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                "org/bukkit/entity/Entity",
+                "getCustomName",
+                "()Ljava/lang/String;",
+                false);
+
+        assertEquals(Opcodes.INVOKESTATIC, capturingMethodVisitor.lastOpcode);
+        assertEquals("com/patch/foliaphantom/core/patcher/FoliaPatcher", capturingMethodVisitor.lastOwner);
+        assertEquals("safeGetCustomName", capturingMethodVisitor.lastName);
+        assertEquals("(Lorg/bukkit/entity/Entity;)Ljava/lang/String;", capturingMethodVisitor.lastDesc);
+        assertFalse(capturingMethodVisitor.lastIsInterface);
+    }
+
     private MethodVisitor createVisitor(CapturingMethodVisitor capturingMethodVisitor) {
         ThreadSafetyTransformer transformer = new ThreadSafetyTransformer(Logger.getLogger("test"));
         ClassVisitor cv = transformer.createVisitor(new ClassVisitor(Opcodes.ASM9) {

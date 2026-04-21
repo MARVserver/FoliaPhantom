@@ -511,6 +511,17 @@ public final class FoliaPatcher {
         }
     }
 
+    public static String safeGetCustomName(Entity entity) {
+        if (entity == null) {
+            return null;
+        }
+        try {
+            return entity.getCustomName();
+        } catch (IllegalStateException threadViolation) {
+            return null;
+        }
+    }
+
     // --- Legacy / Int-returning Method Mappings ---
 
     public static int scheduleSyncDelayedTask(BukkitScheduler s, Plugin p, Runnable r, long d) {
