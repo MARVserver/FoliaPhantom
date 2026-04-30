@@ -2,6 +2,8 @@ package com.patch.foliaphantom.core.transformer.impl;
 
 import com.patch.foliaphantom.core.transformer.ClassTransformer;
 import org.objectweb.asm.ClassVisitor;
+import com.patch.foliaphantom.core.transformer.ScanningClassVisitor;
+import java.util.Set;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
@@ -57,5 +59,10 @@ public class ScoreboardClassTransformer implements ClassTransformer {
 
             super.visitMethodInsn(opcode, owner, name, desc, isInterface);
         }
+    }
+
+    @Override
+    public boolean supports(Set<ScanningClassVisitor.PatchReason> reasons) {
+        return reasons.contains(ScanningClassVisitor.PatchReason.SCOREBOARD_TEAM);
     }
 }

@@ -103,4 +103,9 @@ public class ThreadSafetyTransformer implements ClassTransformer {
             return owner != null && owner.startsWith("org/bukkit/entity/");
         }
     }
+
+    @Override
+    public boolean supports(Set<ScanningClassVisitor.PatchReason> reasons) {
+        return reasons.contains(ScanningClassVisitor.PatchReason.BLOCK_SET_TYPE);
+    }
 }

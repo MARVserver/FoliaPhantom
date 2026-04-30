@@ -29,9 +29,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -90,6 +93,10 @@ public class PluginPatcher {
 
     /** Statistics: number of classes skipped (no changes needed) */
     private final AtomicInteger classesSkipped = new AtomicInteger(0);
+    private final AtomicInteger classesFastSkipped = new AtomicInteger(0);
+    private final AtomicInteger classesAsmScanned = new AtomicInteger(0);
+    private final AtomicInteger classesQueued = new AtomicInteger(0);
+    private final AtomicInteger maxInFlightObserved = new AtomicInteger(0);
 
     /**
      * Creates a new PluginPatcher instance with the specified logger.
@@ -141,6 +148,10 @@ public class PluginPatcher {
         classesScanned.set(0);
         classesTransformed.set(0);
         classesSkipped.set(0);
+        classesFastSkipped.set(0);
+        classesAsmScanned.set(0);
+        classesQueued.set(0);
+        maxInFlightObserved.set(0);
 
         logger.info("[FoliaPhantom] ─────────────────────────────────────────");
         logger.info("[FoliaPhantom] Patching: " + originalJar.getName());
@@ -155,6 +166,10 @@ public class PluginPatcher {
         logger.info("[FoliaPhantom]   Classes scanned:     " + classesScanned.get());
         logger.info("[FoliaPhantom]   Classes transformed: " + classesTransformed.get());
         logger.info("[FoliaPhantom]   Classes skipped:     " + classesSkipped.get());
+        logger.info("[FoliaPhantom]   Fast-skipped:        " + classesFastSkipped.get());
+        logger.info("[FoliaPhantom]   ASM scanned:         " + classesAsmScanned.get());
+        logger.info("[FoliaPhantom]   Queued classes:      " + classesQueued.get());
+        logger.info("[FoliaPhantom]   Max in-flight:       " + maxInFlightObserved.get());
         logger.info("[FoliaPhantom] ─────────────────────────────────────────");
     }
 
@@ -166,18 +181,21 @@ public class PluginPatcher {
      * @throws IOException If an I/O error occurs
      */
     private void createPatchedJar(Path source, Path destination) throws IOException {
-        ForkJoinPool executor = ForkJoinPool.commonPool();
-
-        // Container for async class patching results
-        List<ClassPatchFuture> classFutures = new ArrayList<>(256);
-        java.util.Set<String> writtenEntries = new java.util.HashSet<>();
-        java.util.Set<String> reservedEntries = new java.util.HashSet<>();
+        int parallelism = resolveParallelism();
+        int maxInFlight = resolveMaxInFlight(parallelism);
+        ScanningClassVisitor.PatchMode patchMode = resolvePatchMode();
+        ExecutorService executor = Executors.newFixedThreadPool(parallelism);
+        CompletionService<ClassPatchResult> completionService = new ExecutorCompletionService<>(executor);
+        Set<String> writtenEntries = new HashSet<>();
+        Set<String> reservedEntries = new HashSet<>();
 
         Path parent = destination.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
 
+        long inputSize = 0L;
+        int inFlight = 0;
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(source));
                 ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(destination))) {
 
@@ -204,11 +222,19 @@ public class PluginPatcher {
                 if (!isDirectory && name.endsWith(".class")) {
                     // Queue class for parallel transformation
                     byte[] classBytes = zis.readAllBytes();
+                    inputSize += classBytes.length;
                     classesScanned.incrementAndGet();
-                    classFutures.add(new ClassPatchFuture(
-                            name,
-                            executor.submit(() -> patchClass(classBytes, name))));
+                    classesQueued.incrementAndGet();
+                    completionService.submit(() -> patchClass(classBytes, name, patchMode));
+                    inFlight++;
+                    updateMaxInFlight(inFlight);
                     reservedEntries.add(name);
+                    if (inFlight >= maxInFlight) {
+                        ClassPatchResult result = takeResult(completionService);
+                        inFlight--;
+                        writeEntry(zos, result.className, result.bytes, writtenEntries);
+                        if (result.wasTransformed) classesTransformed.incrementAndGet(); else classesSkipped.incrementAndGet();
+                    }
                 } else if (!isDirectory && (name.equals("paper-plugin.yml") || name.equals("plugin.yml"))) {
                     // Modify plugin manifest to add Folia support flag
                     String originalYml = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
@@ -225,26 +251,21 @@ public class PluginPatcher {
                 }
             }
 
-            // Write transformed classes
-            for (ClassPatchFuture cpf : classFutures) {
-                try {
-                    ClassPatchResult result = cpf.future.get();
-                    writeEntry(zos, cpf.name, result.bytes, writtenEntries);
-
-                    if (result.wasTransformed) {
-                        classesTransformed.incrementAndGet();
-                    } else {
-                        classesSkipped.incrementAndGet();
-                    }
-                } catch (Exception e) {
-                    throw new IOException("Failed to patch class: " + cpf.name, e);
-                }
+            while (inFlight > 0) {
+                ClassPatchResult result = takeResult(completionService);
+                inFlight--;
+                writeEntry(zos, result.className, result.bytes, writtenEntries);
+                if (result.wasTransformed) classesTransformed.incrementAndGet(); else classesSkipped.incrementAndGet();
             }
 
             // Bundle FoliaPatcher runtime classes
             bundleFoliaPatcherClasses(zos, writtenEntries);
+        } finally {
+            executor.shutdown();
         }
-        // Note: ForkJoinPool.commonPool() should not be shut down
+        logger.info("[FoliaPhantom] Mode=" + patchMode.name().toLowerCase(Locale.ROOT)
+                + ", parallelism=" + parallelism + ", maxInFlight=" + maxInFlight
+                + ", inputSize=" + inputSize + " bytes, outputSize=" + Files.size(destination) + " bytes");
     }
 
     /**
@@ -371,16 +392,21 @@ public class PluginPatcher {
      * @param className     The class name (for logging)
      * @return The patching result containing transformed bytes
      */
-    private ClassPatchResult patchClass(byte[] originalBytes, String className) {
+    private ClassPatchResult patchClass(byte[] originalBytes, String className, ScanningClassVisitor.PatchMode patchMode) {
         try {
+            if (!mayNeedPatch(originalBytes)) {
+                classesFastSkipped.incrementAndGet();
+                return new ClassPatchResult(className, originalBytes, false);
+            }
+            classesAsmScanned.incrementAndGet();
             ClassReader cr = new ClassReader(originalBytes);
 
             // Advanced scan: checks class hierarchy, field types AND method calls
             ScanningClassVisitor scanner = new ScanningClassVisitor();
             cr.accept(scanner, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
-            if (!scanner.needsPatching()) {
-                return new ClassPatchResult(originalBytes, false);
+            if (!scanner.needsPatching(patchMode)) {
+                return new ClassPatchResult(className, originalBytes, false);
             }
 
             // Log the specific reasons this class requires transformation
@@ -392,18 +418,22 @@ public class PluginPatcher {
             ClassVisitor cv = cw;
 
             // Apply transformers in reverse order (so first registered runs first)
-            for (int i = transformers.size() - 1; i >= 0; i--) {
-                cv = transformers.get(i).createVisitor(cv);
+            List<ClassTransformer> selected = selectTransformers(scanner.getPatchReasons(), patchMode);
+            if (selected.isEmpty()) {
+                return new ClassPatchResult(className, originalBytes, false);
+            }
+            for (int i = selected.size() - 1; i >= 0; i--) {
+                cv = selected.get(i).createVisitor(cv);
             }
 
             cr.accept(cv, ClassReader.EXPAND_FRAMES);
 
-            return new ClassPatchResult(cw.toByteArray(), true);
+            return new ClassPatchResult(className, cw.toByteArray(), true);
 
         } catch (Exception e) {
             logger.log(Level.WARNING,
                     "[FoliaPhantom] Failed to transform " + className + ", using original", e);
-            return new ClassPatchResult(originalBytes, false);
+            return new ClassPatchResult(className, originalBytes, false);
         }
     }
 
@@ -421,6 +451,52 @@ public class PluginPatcher {
             // Add new flag
             return pluginYml.trim() + "\nfolia-supported: true\n";
         }
+    }
+
+    private static final byte[][] FAST_SCAN_TOKENS = new byte[][] {
+            "org/bukkit/".getBytes(StandardCharsets.UTF_8),
+            "io/papermc/".getBytes(StandardCharsets.UTF_8),
+            "com/destroystokyo/paper/".getBytes(StandardCharsets.UTF_8),
+            "net/kyori/".getBytes(StandardCharsets.UTF_8),
+            "com/patch/foliaphantom/".getBytes(StandardCharsets.UTF_8),
+            "runTask".getBytes(StandardCharsets.UTF_8),
+            "registerNewTeam".getBytes(StandardCharsets.UTF_8),
+            "setType".getBytes(StandardCharsets.UTF_8),
+            "createWorld".getBytes(StandardCharsets.UTF_8)
+    };
+
+    private boolean mayNeedPatch(byte[] classBytes) {
+        for (byte[] token : FAST_SCAN_TOKENS) {
+            if (indexOf(classBytes, token) >= 0) return true;
+        }
+        return false;
+    }
+
+    private int indexOf(byte[] haystack, byte[] needle) {
+        outer: for (int i = 0; i <= haystack.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) if (haystack[i + j] != needle[j]) continue outer;
+            return i;
+        }
+        return -1;
+    }
+
+    private List<ClassTransformer> selectTransformers(Set<ScanningClassVisitor.PatchReason> reasons, ScanningClassVisitor.PatchMode mode) {
+        if (mode == ScanningClassVisitor.PatchMode.COMPAT) return transformers;
+        if (reasons.isEmpty()) return Collections.emptyList();
+        List<ClassTransformer> selected = new ArrayList<>();
+        for (ClassTransformer transformer : transformers) if (transformer.supports(reasons)) selected.add(transformer);
+        return selected;
+    }
+
+    private int resolveParallelism() {
+        int def = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors() - 1, 8));
+        return Integer.getInteger("foliaphantom.parallelism", def);
+    }
+    private int resolveMaxInFlight(int parallelism) { return Integer.getInteger("foliaphantom.maxInFlight", Math.max(16, parallelism * 4)); }
+    private ScanningClassVisitor.PatchMode resolvePatchMode() { return ScanningClassVisitor.PatchMode.fromProperty(System.getProperty("foliaphantom.patchMode")); }
+    private void updateMaxInFlight(int inFlight) { maxInFlightObserved.updateAndGet(v -> Math.max(v, inFlight)); }
+    private ClassPatchResult takeResult(CompletionService<ClassPatchResult> completionService) throws IOException {
+        try { return completionService.take().get(); } catch (Exception e) { throw new IOException("Failed to patch class", e); }
     }
 
     // =========================================================================
@@ -511,6 +587,18 @@ public class PluginPatcher {
         };
     }
 
+    public int[] getExtendedStatistics() {
+        return new int[] {
+                classesScanned.get(),
+                classesTransformed.get(),
+                classesSkipped.get(),
+                classesFastSkipped.get(),
+                classesAsmScanned.get(),
+                classesQueued.get(),
+                maxInFlightObserved.get()
+        };
+    }
+
     // =========================================================================
     // Inner Classes
     // =========================================================================
@@ -518,24 +606,13 @@ public class PluginPatcher {
     /**
      * Container for a class patching future.
      */
-    private static class ClassPatchFuture {
-        final String name;
-        final Future<ClassPatchResult> future;
-
-        ClassPatchFuture(String name, Future<ClassPatchResult> future) {
-            this.name = name;
-            this.future = future;
-        }
-    }
-
-    /**
-     * Result of a class patching operation.
-     */
     private static class ClassPatchResult {
+        final String className;
         final byte[] bytes;
         final boolean wasTransformed;
 
-        ClassPatchResult(byte[] bytes, boolean wasTransformed) {
+        ClassPatchResult(String className, byte[] bytes, boolean wasTransformed) {
+            this.className = className;
             this.bytes = bytes;
             this.wasTransformed = wasTransformed;
         }

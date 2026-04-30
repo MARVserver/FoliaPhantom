@@ -175,4 +175,13 @@ class ScanningClassVisitorTest {
         assertTrue(scanner.getPatchReasons().contains(ScanningClassVisitor.PatchReason.FIELD_TYPE_BUKKIT));
         assertTrue(scanner.getPatchReasons().contains(ScanningClassVisitor.PatchReason.SCOREBOARD_TEAM));
     }
+
+    @Test
+    void patchModeControlsNeedsPatchingForEmptyReasons() {
+        ScanningClassVisitor scanner = new ScanningClassVisitor();
+        scanner.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null);
+        assertTrue(scanner.needsPatching(ScanningClassVisitor.PatchMode.COMPAT));
+        assertFalse(scanner.needsPatching(ScanningClassVisitor.PatchMode.BALANCED));
+        assertFalse(scanner.needsPatching(ScanningClassVisitor.PatchMode.FAST));
+    }
 }
