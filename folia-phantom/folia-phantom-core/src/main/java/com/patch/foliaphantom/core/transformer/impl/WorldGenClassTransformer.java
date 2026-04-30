@@ -66,4 +66,9 @@ public class WorldGenClassTransformer implements ClassTransformer {
             super.visitMethodInsn(opcode, owner, name, desc, isInterface);
         }
     }
+
+    @Override
+    public boolean supports(Set<ScanningClassVisitor.PatchReason> reasons) {
+        return reasons.contains(ScanningClassVisitor.PatchReason.WORLD_CREATION) || reasons.contains(ScanningClassVisitor.PatchReason.WORLD_GENERATOR) || reasons.contains(ScanningClassVisitor.PatchReason.WORLD_CREATOR_CONSTRUCTOR);
+    }
 }

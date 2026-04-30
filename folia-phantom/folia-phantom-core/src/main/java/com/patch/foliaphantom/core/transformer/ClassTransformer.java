@@ -7,6 +7,7 @@
 package com.patch.foliaphantom.core.transformer;
 
 import org.objectweb.asm.ClassVisitor;
+import java.util.Set;
 
 /**
  * Interface for bytecode transformers that modify plugin classes.
@@ -19,4 +20,8 @@ public interface ClassTransformer {
      * @return A new ClassVisitor instance
      */
     ClassVisitor createVisitor(ClassVisitor next);
+
+    default boolean supports(Set<ScanningClassVisitor.PatchReason> reasons) {
+        return true;
+    }
 }

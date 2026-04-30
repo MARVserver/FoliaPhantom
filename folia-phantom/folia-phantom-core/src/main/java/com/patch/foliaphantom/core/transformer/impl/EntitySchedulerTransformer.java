@@ -43,4 +43,9 @@ public class EntitySchedulerTransformer implements ClassTransformer {
             };
         }
     }
+
+    @Override
+    public boolean supports(Set<ScanningClassVisitor.PatchReason> reasons) {
+        return reasons.contains(ScanningClassVisitor.PatchReason.SCHEDULER_METHOD_CALL);
+    }
 }

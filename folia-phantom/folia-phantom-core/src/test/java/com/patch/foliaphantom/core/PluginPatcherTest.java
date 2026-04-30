@@ -1,6 +1,8 @@
 package com.patch.foliaphantom.core;
 
 import org.junit.jupiter.api.Test;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -12,6 +14,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PluginPatcherTest {
@@ -59,5 +62,39 @@ class PluginPatcherTest {
         }
 
         return jarPath;
+    }
+
+    @Test
+    void patchPluginFastSkipsUnrelatedClassAndStripsSignature() throws IOException {
+        Path input = Files.createTempFile("folia-phantom-input", ".jar");
+        Path output = Files.createTempFile("folia-phantom-output", ".jar");
+        byte[] classBytes = createSimpleClass("com/example/PlainClass");
+
+        try (OutputStream out = Files.newOutputStream(input); ZipOutputStream zos = new ZipOutputStream(out)) {
+            zos.putNextEntry(new ZipEntry("plugin.yml"));
+            zos.write("name: Demo\nfolia-supported: false\n".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("META-INF/TEST.SF"));
+            zos.write("sig".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("com/example/PlainClass.class"));
+            zos.write(classBytes);
+            zos.closeEntry();
+        }
+
+        patcher.patchPlugin(input.toFile(), output.toFile());
+        int[] stats = patcher.getExtendedStatistics();
+        assertTrue(stats[3] >= 1);
+        assertTrue(stats[4] == 0);
+        assertTrue(stats[0] >= 1);
+        assertTrue(PluginPatcher.isFoliaSupported(output.toFile()));
+        assertNotNull(PluginPatcher.getPluginNameFromJar(output.toFile()));
+    }
+
+    private byte[] createSimpleClass(String internalName) {
+        ClassWriter cw = new ClassWriter(0);
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, internalName, null, "java/lang/Object", null);
+        cw.visitEnd();
+        return cw.toByteArray();
     }
 }

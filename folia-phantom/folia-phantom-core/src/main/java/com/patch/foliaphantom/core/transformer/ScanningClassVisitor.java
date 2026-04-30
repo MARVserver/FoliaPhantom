@@ -36,6 +36,22 @@ import java.util.Set;
  * </ol>
  */
 public class ScanningClassVisitor extends ClassVisitor {
+    public enum PatchMode {
+        COMPAT,
+        BALANCED,
+        FAST;
+
+        public static PatchMode fromProperty(String value) {
+            if (value == null || value.isBlank()) {
+                return COMPAT;
+            }
+            return switch (value.trim().toLowerCase()) {
+                case "balanced" -> BALANCED;
+                case "fast" -> FAST;
+                default -> COMPAT;
+            };
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Patching reason flags
@@ -107,8 +123,15 @@ public class ScanningClassVisitor extends ClassVisitor {
      * This guarantees 100% compatibility, ensuring no edge cases are missed
      * by the heuristic scanner.
      */
+    public boolean needsPatching(PatchMode mode) {
+        return switch (mode) {
+            case COMPAT -> true;
+            case BALANCED, FAST -> !reasons.isEmpty();
+        };
+    }
+
     public boolean needsPatching() {
-        return true;
+        return needsPatching(PatchMode.COMPAT);
     }
 
     /**

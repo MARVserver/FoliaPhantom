@@ -104,4 +104,9 @@ public class SchedulerClassTransformer implements ClassTransformer {
             return opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESPECIAL;
         }
     }
+
+    @Override
+    public boolean supports(Set<ScanningClassVisitor.PatchReason> reasons) {
+        return reasons.contains(ScanningClassVisitor.PatchReason.SCHEDULER_METHOD_CALL) || reasons.contains(ScanningClassVisitor.PatchReason.BUKKIT_RUNNABLE_INSTANCE_CALL) || reasons.contains(ScanningClassVisitor.PatchReason.EXTENDS_BUKKIT_RUNNABLE) || reasons.contains(ScanningClassVisitor.PatchReason.IMPLEMENTS_BUKKIT_INTERFACE);
+    }
 }
