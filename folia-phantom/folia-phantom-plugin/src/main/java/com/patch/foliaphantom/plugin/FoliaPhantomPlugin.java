@@ -12,6 +12,9 @@ public class FoliaPhantomPlugin extends JavaPlugin {
 
     private PluginWatcher watcher;
 
+    /**
+     * プラグイン初期化処理を行います。
+     */
     @Override
     public void onEnable() {
         // Set the static plugin reference for FoliaPatcher
@@ -55,6 +58,9 @@ public class FoliaPhantomPlugin extends JavaPlugin {
         getLogger().info("FoliaPhantom enabled successfully!");
     }
 
+    /**
+     * プラグイン終了処理を行います。
+     */
     @Override
     public void onDisable() {
         // Stop the watcher task
@@ -74,6 +80,9 @@ public class FoliaPhantomPlugin extends JavaPlugin {
         getLogger().info("FoliaPhantom disabled.");
     }
 
+    /**
+     * 起動バナーを出力します。
+     */
     private void printBanner() {
         getLogger().info("========================================");
         getLogger().info("   FoliaPhantom v" + getPluginMeta().getVersion());
@@ -81,11 +90,14 @@ public class FoliaPhantomPlugin extends JavaPlugin {
         getLogger().info("========================================");
     }
 
+    /**
+     * 監視・出力フォルダを安全に作成します。
+     */
     private void setupFolders() {
         File serverRoot = resolveServerRoot();
-        File watchFolder = new File(serverRoot,
+        File watchFolder = secureResolve(serverRoot,
                 getConfig().getString("auto-patch.watch-folder", "plugins/folia-patch-queue"));
-        File outputFolder = new File(serverRoot, getConfig().getString("auto-patch.output-folder", "plugins/patched"));
+        File outputFolder = secureResolve(serverRoot, getConfig().getString("auto-patch.output-folder", "plugins/patched"));
 
         if (!watchFolder.exists()) {
             if (watchFolder.mkdirs()) {
@@ -100,6 +112,9 @@ public class FoliaPhantomPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * 非同期ウォッチャータスクを開始します。
+     */
     private void startWatcherTask() {
         if (!getConfig().getBoolean("auto-patch.enabled", true)) {
             getLogger().warning("Auto-patching is disabled in config.yml");
@@ -123,10 +138,13 @@ public class FoliaPhantomPlugin extends JavaPlugin {
         getLogger().info("Auto-patching enabled (checking every " + checkInterval + " seconds)");
     }
 
+    /**
+     * 現在の設定値をログ出力します。
+     */
     private void logConfiguration() {
         File serverRoot = resolveServerRoot();
-        File watchFolder = new File(serverRoot, getConfig().getString("auto-patch.watch-folder"));
-        File outputFolder = new File(serverRoot, getConfig().getString("auto-patch.output-folder"));
+        File watchFolder = secureResolve(serverRoot, getConfig().getString("auto-patch.watch-folder"));
+        File outputFolder = secureResolve(serverRoot, getConfig().getString("auto-patch.output-folder"));
 
         getLogger().info("Configuration:");
         getLogger().info("  Watch Folder: " + watchFolder.getAbsolutePath());
@@ -142,10 +160,16 @@ public class FoliaPhantomPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * 初期化済みウォッチャーを返します。
+     */
     public PluginWatcher getWatcher() {
         return watcher;
     }
 
+    /**
+     * サーバールートディレクトリを解決します。
+     */
     private File resolveServerRoot() {
         File dataFolder = getDataFolder();
         File pluginsFolder = dataFolder.getParentFile();
@@ -160,5 +184,24 @@ public class FoliaPhantomPlugin extends JavaPlugin {
             return pluginsFolder;
         }
         return serverRoot;
+    }
+
+    /**
+     * サーバールート配下に限定して相対パスを解決します。
+     */
+    private File secureResolve(File serverRoot, String configuredPath) {
+        File fallback = new File(serverRoot, "plugins");
+        try {
+            File resolved = new File(serverRoot, configuredPath == null ? "" : configuredPath).getCanonicalFile();
+            File canonicalRoot = serverRoot.getCanonicalFile();
+            if (!resolved.toPath().startsWith(canonicalRoot.toPath())) {
+                getLogger().warning("Path escaped server root. Falling back to plugins folder: " + configuredPath);
+                return fallback;
+            }
+            return resolved;
+        } catch (Exception ex) {
+            getLogger().warning("Failed to resolve path safely. Falling back to plugins folder: " + configuredPath);
+            return fallback;
+        }
     }
 }
