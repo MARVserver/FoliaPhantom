@@ -16,11 +16,17 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
     private final FoliaPhantomPlugin plugin;
     private final PluginPatcher patcher;
 
+    /**
+     * コマンド実行クラスを初期化します。
+     */
     public PatchCommand(FoliaPhantomPlugin plugin) {
         this.plugin = plugin;
         this.patcher = new PluginPatcher(plugin.getLogger());
     }
 
+    /**
+     * コマンドを処理します。
+     */
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("foliaphantom.patch")) {
@@ -54,6 +60,9 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    /**
+     * ヘルプメッセージを表示します。
+     */
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "=== FoliaPhantom Commands ===");
         sender.sendMessage(
@@ -63,6 +72,9 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.YELLOW + "/foliapatch reload" + ChatColor.WHITE + " - Reload configuration");
     }
 
+    /**
+     * 監視フォルダ内のプラグイン一覧を表示します。
+     */
     private void listPlugins(CommandSender sender) {
         File serverRoot = resolveServerRoot();
         File watchFolder = new File(serverRoot,
@@ -99,6 +111,9 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.GRAY + "Total: " + jarFiles.length + " plugin(s)");
     }
 
+    /**
+     * 現在のパッチング状態を表示します。
+     */
     private void showStatus(CommandSender sender) {
         PluginWatcher watcher = plugin.getWatcher();
         if (watcher == null) {
@@ -127,6 +142,9 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.GRAY + "Output Folder: " + outputFolder.getAbsolutePath());
     }
 
+    /**
+     * 指定プラグインをパッチします。
+     */
     private void patchPlugin(CommandSender sender, String pluginIdentifier) {
         File serverRoot = resolveServerRoot();
         File watchFolder = new File(serverRoot,
@@ -183,6 +201,11 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
                 return;
             }
 
+            if (!isPathInsideDirectory(targetJar, watchFolder)) {
+                sender.sendMessage(ChatColor.RED + "Invalid plugin path detected. Operation cancelled.");
+                return;
+            }
+
             File outputJar = new File(outputFolder, "patched-" + targetJar.getName());
             patcher.patchPlugin(targetJar, outputJar);
 
@@ -197,11 +220,17 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    /**
+     * 設定をリロードします。
+     */
     private void reloadConfig(CommandSender sender) {
         plugin.reloadConfig();
         sender.sendMessage(ChatColor.GREEN + "Configuration reloaded successfully!");
     }
 
+    /**
+     * タブ補完候補を返します。
+     */
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (!sender.hasPermission("foliaphantom.patch")) {
@@ -239,6 +268,9 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
         return Collections.emptyList();
     }
 
+    /**
+     * サーバールートディレクトリを解決します。
+     */
     private File resolveServerRoot() {
         File dataFolder = plugin.getDataFolder();
         File pluginsFolder = dataFolder.getParentFile();
@@ -255,5 +287,16 @@ public class PatchCommand implements CommandExecutor, TabCompleter {
             return pluginsFolder;
         }
         return serverRoot;
+    }
+
+    /**
+     * 対象パスが基準ディレクトリ配下か検証します。
+     */
+    private boolean isPathInsideDirectory(File target, File directory) {
+        try {
+            return target.getCanonicalFile().toPath().startsWith(directory.getCanonicalFile().toPath());
+        } catch (IOException e) {
+            return false;
+        }
     }
 }

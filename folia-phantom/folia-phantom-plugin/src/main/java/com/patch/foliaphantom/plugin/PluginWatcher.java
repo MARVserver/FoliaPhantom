@@ -33,6 +33,9 @@ public class PluginWatcher implements Runnable {
     private int skippedCount = 0;
     private int failedCount = 0;
 
+    /**
+     * ウォッチャーを初期化します。
+     */
     public PluginWatcher(FoliaPhantomPlugin plugin) {
         this.logger = plugin.getLogger();
         this.config = plugin.getConfig();
@@ -55,6 +58,9 @@ public class PluginWatcher implements Runnable {
         createFolders();
     }
 
+    /**
+     * 必要なフォルダを作成します。
+     */
     private void createFolders() {
         if (!watchFolder.exists() && !watchFolder.mkdirs()) {
             logger.warning("Failed to create watch folder: " + watchFolder.getAbsolutePath());
@@ -69,6 +75,9 @@ public class PluginWatcher implements Runnable {
         }
     }
 
+    /**
+     * 定期実行エントリポイントです。
+     */
     @Override
     public void run() {
         if (!config.getBoolean("auto-patch.enabled", true)) {
@@ -91,6 +100,9 @@ public class PluginWatcher implements Runnable {
         }
     }
 
+    /**
+     * 監視フォルダを走査し、対象プラグインをパッチします。
+     */
     private void scanAndPatchPlugins() {
         File[] jarFiles = watchFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".jar"));
 
@@ -103,6 +115,12 @@ public class PluginWatcher implements Runnable {
         }
 
         for (File jarFile : jarFiles) {
+            if (!isPathInsideDirectory(jarFile, watchFolder)) {
+                logger.warning("Skipped suspicious path outside watch folder: " + jarFile.getPath());
+                skippedCount++;
+                continue;
+            }
+
             // Check if we've already processed this version of the file
             String fileName = jarFile.getName();
             long lastModified = jarFile.lastModified();
@@ -130,6 +148,9 @@ public class PluginWatcher implements Runnable {
         }
     }
 
+    /**
+     * 指定JARをパッチ対象にするか判定します。
+     */
     private boolean shouldPatchPlugin(File jarFile) throws IOException {
         String fileName = jarFile.getName();
 
@@ -164,6 +185,9 @@ public class PluginWatcher implements Runnable {
         return true;
     }
 
+    /**
+     * ワイルドカードパターンをコンパイルします。
+     */
     private List<Pattern> compilePatterns(List<String> wildcardPatterns) {
         List<Pattern> patterns = new ArrayList<>(wildcardPatterns.size());
         for (String pattern : wildcardPatterns) {
@@ -173,10 +197,16 @@ public class PluginWatcher implements Runnable {
         return patterns;
     }
 
+    /**
+     * ファイル名がパターン一致するか判定します。
+     */
     private boolean matchesPattern(String fileName, Pattern pattern) {
         return pattern.matcher(fileName).matches();
     }
 
+    /**
+     * 単一プラグインをパッチします。
+     */
     private void patchPlugin(File jarFile) throws IOException {
         String fileName = jarFile.getName();
         String pluginName = PluginPatcher.getPluginNameFromJar(jarFile);
@@ -214,6 +244,9 @@ public class PluginWatcher implements Runnable {
         }
     }
 
+    /**
+     * 統計情報を返します。
+     */
     public Map<String, Integer> getStatistics() {
         Map<String, Integer> stats = new HashMap<>();
         stats.put("patched", patchedCount);
@@ -223,6 +256,9 @@ public class PluginWatcher implements Runnable {
         return stats;
     }
 
+    /**
+     * 統計と処理履歴をリセットします。
+     */
     public void reset() {
         processedFiles.clear();
         patchedCount = 0;
@@ -230,6 +266,9 @@ public class PluginWatcher implements Runnable {
         failedCount = 0;
     }
 
+    /**
+     * サーバールートディレクトリを解決します。
+     */
     private File resolveServerRoot(FoliaPhantomPlugin plugin) {
         File dataFolder = plugin.getDataFolder();
         File pluginsFolder = dataFolder.getParentFile();
@@ -244,5 +283,16 @@ public class PluginWatcher implements Runnable {
             return pluginsFolder;
         }
         return serverRoot;
+    }
+
+    /**
+     * 対象パスが基準ディレクトリ配下か検証します。
+     */
+    private boolean isPathInsideDirectory(File target, File directory) {
+        try {
+            return target.getCanonicalFile().toPath().startsWith(directory.getCanonicalFile().toPath());
+        } catch (IOException e) {
+            return false;
+        }
     }
 }
