@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -89,6 +90,34 @@ class PluginPatcherTest {
         assertTrue(stats[0] >= 1);
         assertTrue(PluginPatcher.isFoliaSupported(output.toFile()));
         assertNotNull(PluginPatcher.getPluginNameFromJar(output.toFile()));
+        try (ZipFile zipFile = new ZipFile(output.toFile())) {
+            assertNotNull(zipFile.getEntry("META-INF/foliaphantom/audit.properties"));
+            assertNotNull(zipFile.getEntry("META-INF/foliaphantom/COPYRIGHT-NOTICE.txt"));
+        }
+    }
+
+    @Test
+    void patchPluginSkipsUnsafeJarEntryNames() throws IOException {
+        Path input = Files.createTempFile("folia-phantom-unsafe-input", ".jar");
+        Path output = Files.createTempFile("folia-phantom-unsafe-output", ".jar");
+
+        try (OutputStream out = Files.newOutputStream(input); ZipOutputStream zos = new ZipOutputStream(out)) {
+            zos.putNextEntry(new ZipEntry("plugin.yml"));
+            zos.write("name: Demo\n".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("../escape.txt"));
+            zos.write("bad".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+
+        patcher.patchPlugin(input.toFile(), output.toFile());
+
+        try (ZipFile zipFile = new ZipFile(output.toFile())) {
+            assertNotNull(zipFile.getEntry("plugin.yml"));
+            assertNotNull(zipFile.getEntry("META-INF/foliaphantom/audit.properties"));
+            assertTrue(zipFile.stream().noneMatch(entry -> entry.getName().contains("../")));
+        }
+        assertTrue(patcher.getExtendedStatistics()[7] >= 1);
     }
 
     private byte[] createSimpleClass(String internalName) {
