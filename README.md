@@ -93,3 +93,11 @@ gradle wrapper --gradle-version 8.14.3 --no-validate-url
 ### 📄 License
 Licensed under the **MARV License**. See `LICENSE` for more details.
 Copyright © 2025 **Marv**.
+---
+
+## Next Safe Profile
+
+FoliaPhantom now includes a next-generation safe profile for local, auditable patching.
+It adds JAR entry validation, size limits, transformation audit metadata, and a copyright notice inside patched output.
+
+See [docs/next-safe-profile.md](docs/next-safe-profile.md) for the security and copyright model.

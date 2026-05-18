@@ -7,7 +7,9 @@
 package com.patch.foliaphantom.core.transformer.impl;
 
 import com.patch.foliaphantom.core.transformer.ClassTransformer;
+import com.patch.foliaphantom.core.transformer.ScanningClassVisitor;
 import org.objectweb.asm.*;
+import java.util.Set;
 import java.util.logging.Logger;
 
 /**

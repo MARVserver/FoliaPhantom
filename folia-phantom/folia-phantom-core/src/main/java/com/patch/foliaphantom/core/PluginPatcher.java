@@ -78,6 +78,12 @@ public class PluginPatcher {
 
     /** Compression level for output JAR (1 = fastest) */
     private static final int COMPRESSION_LEVEL = 1;
+    private static final long MAX_INPUT_JAR_BYTES = Long.getLong("foliaphantom.maxJarBytes", 256L * 1024L * 1024L);
+    private static final long MAX_ENTRY_BYTES = Long.getLong("foliaphantom.maxEntryBytes", 64L * 1024L * 1024L);
+    private static final long MAX_TOTAL_UNCOMPRESSED_BYTES =
+            Long.getLong("foliaphantom.maxTotalUncompressedBytes", 512L * 1024L * 1024L);
+    private static final String AUDIT_ENTRY = "META-INF/foliaphantom/audit.properties";
+    private static final String COMPLIANCE_NOTICE_ENTRY = "META-INF/foliaphantom/COPYRIGHT-NOTICE.txt";
 
     /** Logger instance for this patcher */
     private final Logger logger;
@@ -97,6 +103,8 @@ public class PluginPatcher {
     private final AtomicInteger classesAsmScanned = new AtomicInteger(0);
     private final AtomicInteger classesQueued = new AtomicInteger(0);
     private final AtomicInteger maxInFlightObserved = new AtomicInteger(0);
+    private final AtomicInteger unsafeEntriesSkipped = new AtomicInteger(0);
+    private final AtomicInteger signatureEntriesRemoved = new AtomicInteger(0);
 
     /**
      * Creates a new PluginPatcher instance with the specified logger.
@@ -152,6 +160,10 @@ public class PluginPatcher {
         classesAsmScanned.set(0);
         classesQueued.set(0);
         maxInFlightObserved.set(0);
+        unsafeEntriesSkipped.set(0);
+        signatureEntriesRemoved.set(0);
+
+        validateInputJar(originalJar.toPath());
 
         logger.info("[FoliaPhantom] ─────────────────────────────────────────");
         logger.info("[FoliaPhantom] Patching: " + originalJar.getName());
@@ -170,6 +182,8 @@ public class PluginPatcher {
         logger.info("[FoliaPhantom]   ASM scanned:         " + classesAsmScanned.get());
         logger.info("[FoliaPhantom]   Queued classes:      " + classesQueued.get());
         logger.info("[FoliaPhantom]   Max in-flight:       " + maxInFlightObserved.get());
+        logger.info("[FoliaPhantom]   Unsafe entries skip: " + unsafeEntriesSkipped.get());
+        logger.info("[FoliaPhantom]   Signatures removed:  " + signatureEntriesRemoved.get());
         logger.info("[FoliaPhantom] ─────────────────────────────────────────");
     }
 
@@ -208,8 +222,15 @@ public class PluginPatcher {
                 String name = entry.getName();
                 boolean isDirectory = entry.isDirectory();
 
+                if (!isSafeJarEntryName(name)) {
+                    unsafeEntriesSkipped.incrementAndGet();
+                    logger.warning("[FoliaPhantom] Skipping unsafe JAR entry name: " + name);
+                    continue;
+                }
+
                 // Skip JAR signature files (for signed JARs like MythicMobs)
                 if (isSignatureFile(name)) {
+                    signatureEntriesRemoved.incrementAndGet();
                     logger.fine("[FoliaPhantom] Removing signature file: " + name);
                     continue;
                 }
@@ -221,8 +242,11 @@ public class PluginPatcher {
 
                 if (!isDirectory && name.endsWith(".class")) {
                     // Queue class for parallel transformation
-                    byte[] classBytes = zis.readAllBytes();
+                    byte[] classBytes = readEntryBytesLimited(zis, name);
                     inputSize += classBytes.length;
+                    if (inputSize > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                        throw new IOException("Input JAR expands beyond the configured safety limit: " + source);
+                    }
                     classesScanned.incrementAndGet();
                     classesQueued.incrementAndGet();
                     completionService.submit(() -> patchClass(classBytes, name, patchMode));
@@ -237,7 +261,9 @@ public class PluginPatcher {
                     }
                 } else if (!isDirectory && (name.equals("paper-plugin.yml") || name.equals("plugin.yml"))) {
                     // Modify plugin manifest to add Folia support flag
-                    String originalYml = new String(zis.readAllBytes(), StandardCharsets.UTF_8);
+                    byte[] ymlBytes = readEntryBytesLimited(zis, name);
+                    inputSize += ymlBytes.length;
+                    String originalYml = new String(ymlBytes, StandardCharsets.UTF_8);
                     String modifiedYml = addFoliaSupportedFlag(originalYml);
                     writeEntry(zos, name, modifiedYml.getBytes(StandardCharsets.UTF_8), writtenEntries);
                     logger.fine("[FoliaPhantom] Modified " + name + " with folia-supported: true");
@@ -260,6 +286,7 @@ public class PluginPatcher {
 
             // Bundle FoliaPatcher runtime classes
             bundleFoliaPatcherClasses(zos, writtenEntries);
+            writeAuditMetadata(zos, writtenEntries, source.getFileName().toString(), patchMode, parallelism, maxInFlight);
         } finally {
             executor.shutdown();
         }
@@ -274,6 +301,29 @@ public class PluginPatcher {
     private boolean isSignatureFile(String name) {
         return name.startsWith("META-INF/") &&
                 (name.endsWith(".SF") || name.endsWith(".DSA") || name.endsWith(".RSA"));
+    }
+
+    private void validateInputJar(Path source) throws IOException {
+        long fileSize = Files.size(source);
+        if (fileSize > MAX_INPUT_JAR_BYTES) {
+            throw new IOException("Input JAR exceeds the configured safety limit: " + source);
+        }
+    }
+
+    private boolean isSafeJarEntryName(String name) {
+        if (name == null || name.isBlank() || name.indexOf('\0') >= 0) return false;
+        String normalized = name.replace('\\', '/');
+        return !normalized.startsWith("/")
+                && !normalized.matches("^[A-Za-z]:/.*")
+                && !normalized.contains("../")
+                && !normalized.equals("..")
+                && !normalized.endsWith("/..");
+    }
+
+    private byte[] readEntryBytesLimited(InputStream input, String entryName) throws IOException {
+        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+        copyStream(input, output, entryName);
+        return output.toByteArray();
     }
 
     /**
@@ -300,7 +350,7 @@ public class PluginPatcher {
             return;
         }
         zos.putNextEntry(new ZipEntry(name));
-        copyStream(data, zos);
+        copyStream(data, zos, name);
         zos.closeEntry();
         writtenEntries.add(name);
     }
@@ -364,6 +414,31 @@ public class PluginPatcher {
         }
     }
 
+    private void writeAuditMetadata(ZipOutputStream zos, Set<String> writtenEntries, String sourceName,
+                                    ScanningClassVisitor.PatchMode patchMode, int parallelism, int maxInFlight)
+            throws IOException {
+        if (!writtenEntries.contains(AUDIT_ENTRY)) {
+            String audit = "tool=FoliaPhantom\n"
+                    + "profile=next-generation-safe\n"
+                    + "sourceName=" + sourceName.replace('\n', '_').replace('\r', '_') + "\n"
+                    + "patchMode=" + patchMode.name().toLowerCase(Locale.ROOT) + "\n"
+                    + "classesScanned=" + classesScanned.get() + "\n"
+                    + "classesTransformed=" + classesTransformed.get() + "\n"
+                    + "unsafeEntriesSkipped=" + unsafeEntriesSkipped.get() + "\n"
+                    + "signatureEntriesRemoved=" + signatureEntriesRemoved.get() + "\n"
+                    + "parallelism=" + parallelism + "\n"
+                    + "maxInFlight=" + maxInFlight + "\n";
+            writeEntry(zos, AUDIT_ENTRY, audit.getBytes(StandardCharsets.UTF_8), writtenEntries);
+        }
+        if (!writtenEntries.contains(COMPLIANCE_NOTICE_ENTRY)) {
+            String notice = "This JAR was transformed locally by FoliaPhantom.\n"
+                    + "Only patch plugins that you own, administer, or are licensed to modify.\n"
+                    + "Do not redistribute the transformed JAR unless the original plugin license permits it.\n"
+                    + "Original copyright and license notices remain the responsibility of the plugin owner.\n";
+            writeEntry(zos, COMPLIANCE_NOTICE_ENTRY, notice.getBytes(StandardCharsets.UTF_8), writtenEntries);
+        }
+    }
+
     /**
      * Copies data from an input stream to an output stream.
      * 
@@ -372,9 +447,18 @@ public class PluginPatcher {
      * @throws IOException If an I/O error occurs
      */
     private void copyStream(InputStream in, OutputStream out) throws IOException {
+        copyStream(in, out, "stream");
+    }
+
+    private void copyStream(InputStream in, OutputStream out, String entryName) throws IOException {
         byte[] buffer = new byte[BUFFER_SIZE];
+        long total = 0L;
         int len;
         while ((len = in.read(buffer)) > 0) {
+            total += len;
+            if (total > MAX_ENTRY_BYTES) {
+                throw new IOException("JAR entry exceeds the configured safety limit: " + entryName);
+            }
             out.write(buffer, 0, len);
         }
     }
@@ -595,7 +679,9 @@ public class PluginPatcher {
                 classesFastSkipped.get(),
                 classesAsmScanned.get(),
                 classesQueued.get(),
-                maxInFlightObserved.get()
+                maxInFlightObserved.get(),
+                unsafeEntriesSkipped.get(),
+                signatureEntriesRemoved.get()
         };
     }
 

@@ -18,7 +18,13 @@ public class CLI {
         setupLogger();
         printBanner();
 
-        File inputFile = getInputFile(args);
+        InputOptions options = parseArgs(args);
+        if (!options.rightsConfirmed()) {
+            LOGGER.warning("Copyright safety: patch only plugins you own, administer, or are licensed to modify.");
+            LOGGER.warning("Use --rights-confirmed to record that confirmation in automated runs.");
+        }
+
+        File inputFile = getInputFile(options.inputPath());
         if (inputFile == null) {
             return;
         }
@@ -57,18 +63,28 @@ public class CLI {
     }
 
     private static void printBanner() {
-        System.out.println("███████╗ ██████╗ ██╗     ██╗ █████╗     ██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗");
-        System.out.println("██╔════╝██╔═══██╗██║     ██║██╔══██╗    ██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║");
-        System.out.println("█████╗  ██║   ██║██║     ██║███████║    ██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║");
-        System.out.println("██╔══╝  ██║   ██║██║     ██║██╔══██║    ██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║");
-        System.out.println("██║     ╚██████╔╝███████╗██║██║  ██║    ██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║");
-        System.out.println("╚═╝      ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═╝    ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝");
-        System.out.println("\nCLI utility for patching Bukkit plugins for Folia compatibility.\n");
+        System.out.println("FoliaPhantom Next Safe");
+        System.out.println("CLI utility for local Bukkit-to-Folia compatibility patching.\n");
     }
 
-    private static File getInputFile(String[] args) {
+    private static InputOptions parseArgs(String[] args) {
+        String inputPath = null;
+        boolean rightsConfirmed = false;
+        for (String arg : args) {
+            if ("--rights-confirmed".equals(arg)) {
+                rightsConfirmed = true;
+            } else if (inputPath == null) {
+                inputPath = arg;
+            } else {
+                LOGGER.warning("Ignoring unknown argument: " + arg);
+            }
+        }
+        return new InputOptions(inputPath, rightsConfirmed);
+    }
+
+    private static File getInputFile(String inputPath) {
         File inputFile;
-        if (args.length == 0) {
+        if (inputPath == null) {
             try (Scanner scanner = new Scanner(System.in)) {
                 System.out.print(">> Enter the path to a JAR file or a directory of JARs: ");
                 String path = scanner.nextLine();
@@ -79,7 +95,7 @@ public class CLI {
                 inputFile = new File(path);
             }
         } else {
-            inputFile = new File(args[0]);
+            inputFile = new File(inputPath);
         }
 
         if (!inputFile.exists()) {
@@ -134,5 +150,8 @@ public class CLI {
             LOGGER.log(Level.SEVERE, "An error occurred while patching " + inputJar.getName() + ":", e);
             return false;
         }
+    }
+
+    private record InputOptions(String inputPath, boolean rightsConfirmed) {
     }
 }
