@@ -24,10 +24,12 @@ import com.patch.foliaphantom.core.PluginPatcher;
 
 import java.awt.Desktop;
 import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -40,7 +42,7 @@ import java.util.logging.*;
  */
 public class FoliaPhantomApp extends Application {
 
-    private static final String VERSION = "1.1.0";
+    private static final String VERSION = "1.4.2";
 
     // UI Elements
     private TextArea statusArea;
@@ -55,6 +57,7 @@ public class FoliaPhantomApp extends Application {
     // State
     private final List<File> selectedFiles = new ArrayList<>();
     private File outputDirectory = null;
+    private volatile File lastResultsDirectory = null;
     private double xOffset = 0;
     private double yOffset = 0;
 
@@ -274,17 +277,115 @@ public class FoliaPhantomApp extends Application {
     }
 
     private void openResultsDir() {
-        if (!Desktop.isDesktopSupported()) {
-            logError("Desktop integration is not supported on this environment.");
+        File dir = resolveResultsDirectory();
+        if (dir == null) {
+            logError("No results directory is available yet.");
             return;
         }
 
         try {
-            File dir = outputDirectory != null ? outputDirectory : new File(".");
-            Desktop.getDesktop().open(dir);
-        } catch (Exception e) {
-            logError("Could not open directory: " + e.getMessage());
+            File target = dir.getCanonicalFile();
+            if (!target.exists()) {
+                logError("Results directory does not exist: " + target.getAbsolutePath());
+                return;
+            }
+            if (!target.isDirectory()) {
+                target = target.getParentFile();
+            }
+            if (target == null) {
+                logError("Could not determine results directory.");
+                return;
+            }
+
+            if (openWithNativeCommand(target) || openWithDesktop(target)) {
+                logInfo("Opening results: " + target.getAbsolutePath());
+            } else {
+                logError("No supported file manager integration is available.");
+            }
+        } catch (Exception | LinkageError e) {
+            logError("Could not open results directory: " + describeFailure(e));
         }
+    }
+
+    private File resolveResultsDirectory() {
+        if (outputDirectory != null) {
+            return outputDirectory;
+        }
+        if (lastResultsDirectory != null) {
+            return lastResultsDirectory;
+        }
+        if (!selectedFiles.isEmpty()) {
+            File parent = selectedFiles.get(0).getParentFile();
+            if (parent != null) {
+                return parent;
+            }
+        }
+        return null;
+    }
+
+    private boolean openWithNativeCommand(File target) {
+        List<List<String>> commands = nativeOpenCommands(target);
+        for (List<String> command : commands) {
+            try {
+                Process process = new ProcessBuilder(command)
+                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                        .redirectError(ProcessBuilder.Redirect.DISCARD)
+                        .start();
+                process.onExit().thenAccept(completed -> {
+                    if (completed.exitValue() != 0) {
+                        logError("File manager command failed with exit code " + completed.exitValue() + ".");
+                    }
+                });
+                return true;
+            } catch (IOException | RuntimeException e) {
+                logInfo("File manager command unavailable: " + command.get(0));
+            }
+        }
+        return false;
+    }
+
+    private List<List<String>> nativeOpenCommands(File target) {
+        String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String path = target.getAbsolutePath();
+        List<List<String>> commands = new ArrayList<>();
+
+        if (osName.contains("win")) {
+            commands.add(List.of("explorer", path));
+        } else if (osName.contains("mac")) {
+            commands.add(List.of("open", path));
+        } else {
+            commands.add(List.of("xdg-open", path));
+            commands.add(List.of("gio", "open", path));
+        }
+
+        return commands;
+    }
+
+    private boolean openWithDesktop(File target) {
+        try {
+            if (!Desktop.isDesktopSupported()) {
+                return false;
+            }
+
+            Desktop desktop = Desktop.getDesktop();
+            if (!desktop.isSupported(Desktop.Action.OPEN)) {
+                return false;
+            }
+
+            desktop.open(target);
+            return true;
+        } catch (IOException | RuntimeException | LinkageError e) {
+            logError("Desktop integration failed: " + describeFailure(e));
+            return false;
+        }
+    }
+
+    private String describeFailure(Throwable error) {
+        String message = error.getMessage();
+        if (message == null || message.isBlank()) {
+            return error.getClass().getSimpleName();
+        }
+        return message;
     }
 
     private void runPatchProcess() {
@@ -317,6 +418,7 @@ public class FoliaPhantomApp extends Application {
         ExecutorService executor = Executors.newFixedThreadPool(Math.min(4, Math.max(1, total)));
         currentExecutor = executor;
         Logger patcherLogger = createLogger();
+        lastResultsDirectory = resolveResultsDirectory();
 
         logInfo("Starting process...");
 
@@ -383,6 +485,7 @@ public class FoliaPhantomApp extends Application {
     private void clearFiles() {
         selectedFiles.clear();
         fileListView.getItems().clear();
+        lastResultsDirectory = null;
         updateStats();
         openDirButton.setVisible(false);
     }
