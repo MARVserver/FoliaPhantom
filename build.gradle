@@ -4,13 +4,13 @@ plugins {
 }
 
 group = 'com.patch.foliaphantom'
-version = '1.0.0'
+version = '1.4.3'
 
 ext {
     asmVersion = '9.7'
     paperApiVersion = '1.21.1-R0.1-SNAPSHOT'
     junitVersion = '5.10.2'
-    javafxVersion = '21.0.1'
+    javafxVersion = '21.0.11'
 }
 
 allprojects {
