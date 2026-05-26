@@ -12,7 +12,7 @@ import java.util.logging.SimpleFormatter;
 
 public class CLI {
 
-    private static final Logger LOGGER = Logger.getLogger("FoliaPhantom-CLI");
+    private static final Logger LOGGER = Logger.getLogger("pasta-CLI");
 
     public static void main(String[] args) {
         setupLogger();
@@ -63,7 +63,7 @@ public class CLI {
     }
 
     private static void printBanner() {
-        System.out.println("FoliaPhantom Next Safe");
+        System.out.println("pasta Next Safe");
         System.out.println("CLI utility for local Bukkit-to-Folia compatibility patching.\n");
     }
 

@@ -13,8 +13,8 @@
     <artifactId>folia-phantom-plugin</artifactId>
     <packaging>jar</packaging>
 
-    <name>Folia Phantom Plugin</name>
-    <description>Bukkit plugin for Folia Phantom.</description>
+    <name>pasta Plugin</name>
+    <description>Bukkit plugin for pasta.</description>
 
     <dependencies>
         <dependency>
