@@ -10,9 +10,12 @@ pasta documentation is maintained in this repository instead of the GitHub Wiki.
 
 ## Supported Distributions
 
-- Windows GUI ZIP with `pasta-gui.bat`
-- Linux GUI ZIP with `pasta-gui.sh`
-- CLI ZIP with `pasta-cli.bat` and `pasta-cli.sh`
+- Folia: Windows GUI, Linux GUI, CLI
+- ShreddedPaper: Windows GUI, Linux GUI, CLI
+- Canvas: Windows GUI, Linux GUI, CLI
+- Horizon: Windows GUI, Linux GUI, CLI
+
+Every server-family ZIP includes `SERVER-COMPATIBILITY.txt`.
 
 ## Basic CLI Usage
 

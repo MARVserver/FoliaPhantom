@@ -39,21 +39,17 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
-          $windowsGui = "dist/pasta-windows-gui-$version.zip"
-          $linuxGui = "dist/pasta-linux-gui-$version.zip"
-          $cli = "dist/pasta-cli-$version.zip"
-
-          foreach ($file in @($windowsGui, $linuxGui, $cli)) {
-            if (-not (Test-Path $file)) {
-              Write-Error "Required artifact not found: $file"
-              Get-ChildItem dist -Recurse
-              exit 1
-            }
+          $artifacts = Get-ChildItem dist -Filter "pasta-*-$version.zip" | Sort-Object Name
+          if ($artifacts.Count -ne 12) {
+            Write-Error "Expected 12 release ZIPs, found $($artifacts.Count)."
+            Get-ChildItem dist -Recurse
+            exit 1
           }
 
-          "WINDOWS_GUI=$windowsGui" >> $env:GITHUB_OUTPUT
-          "LINUX_GUI=$linuxGui" >> $env:GITHUB_OUTPUT
-          "CLI=$cli" >> $env:GITHUB_OUTPUT
+          $artifactList = ($artifacts | ForEach-Object { $_.FullName }) -join "`n"
+          "ARTIFACTS<<EOF" >> $env:GITHUB_OUTPUT
+          $artifactList >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -61,18 +57,16 @@ jobs:
           name: "pasta ${{ github.ref_name }}"
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: |
-            ${{ steps.artifacts.outputs.WINDOWS_GUI }}
-            ${{ steps.artifacts.outputs.LINUX_GUI }}
-            ${{ steps.artifacts.outputs.CLI }}
+          files: ${{ steps.artifacts.outputs.ARTIFACTS }}
           body: |
             ## pasta ${{ github.ref_name }}
 
             ### Assets
             | File | Description |
             |------|-------------|
-            | `pasta-windows-gui-*.zip` | Windows GUI distribution |
-            | `pasta-linux-gui-*.zip` | Linux GUI distribution |
-            | `pasta-cli-*.zip` | Command-line distribution |
+            | `pasta-folia-*.zip` | Folia Windows GUI, Linux GUI, and CLI distributions |
+            | `pasta-shreddedpaper-*.zip` | ShreddedPaper Windows GUI, Linux GUI, and CLI distributions |
+            | `pasta-canvas-*.zip` | Canvas Windows GUI, Linux GUI, and CLI distributions |
+            | `pasta-horizon-*.zip` | Horizon Windows GUI, Linux GUI, and CLI distributions |
 
             FoliaPhantom has been renamed to pasta. The GitHub Wiki has been replaced by repository documentation under `docs/`.
