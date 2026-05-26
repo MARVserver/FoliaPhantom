@@ -1,103 +1,76 @@
-# Folia Phantom 👻
-# ⚠Before transitioning to the next-generation project
-[English](#english) | [日本語 (Japanese)](#日本語-japanese)
+# pasta
 
----
+pasta is the renamed successor to FoliaPhantom. It patches legacy Bukkit plugin JARs for Folia-compatible server environments by rewriting selected bytecode patterns and adding local audit metadata.
 
-## English
+## Rename Notice
 
-**Folia Phantom** is a professional-grade bytecode transformation tool designed to bridge the gap between legacy Bukkit plugins and the high-performance [Folia](https://github.com/PaperMC/Folia) server.
+FoliaPhantom has been renamed to **pasta**.
 
-By dynamically rewriting class files, Folia Phantom automatically converts thread-unsafe API calls (such as global schedulers and direct block modifications) into Folia-compatible region-based or asynchronous operations.
+The old package/module paths remain in source for compatibility during the transition, but public documentation, release artifacts, and user-facing names now use pasta. Existing FoliaPhantom users should download pasta releases going forward.
 
-### ✨ Key Features
+Related projects:
 
-- **Automated Patching**: Seamlessly converts `BukkitScheduler` and `BukkitRunnable` to Folia schedulers.
-- **Thread Safety Enforcement**: Automatically wraps `Block.setType` and other world-modifying calls to execute on the correct region threads.
-- **Modern Pro GUI**: A premium, glassmorphism-styled Desktop UI for easy batch processing.
-- **High Performance**: Parallel processing with `ForkJoinPool` and fast-fail bytecode scanning for lightning-fast patching.
-- **Compatibility First**: Automatically handles JAR signatures and updates `plugin.yml` with the `folia-supported` flag.
-- **CLI & Plugin Support**: Available as a standalone GUI, CLI tool, or a server-side plugin for on-the-fly patching.
+- [MultiPaper/ShreddedPaper](https://github.com/MultiPaper/ShreddedPaper)
+- [CraftCanvasMC/Canvas](https://github.com/CraftCanvasMC/Canvas)
+- [MARVserver/pasta](https://github.com/MARVserver/pasta)
 
-### 🏗️ Project Structure
+## Editions
 
-- `folia-phantom-core`: The heart of the project containing ASM transformers and patching logic.
-- `folia-phantom-gui`: Modern JavaFX application for desktop environments.
-- `folia-phantom-cli`: Command-line tool for automated workflows and headless environments.
-- `folia-phantom-plugin`: Bukkit plugin implementation for real-time server-side transformation.
+- **Windows GUI**: JavaFX desktop launcher for Windows users.
+- **Linux GUI**: JavaFX desktop launcher for Linux users.
+- **CLI**: Headless command-line tool for automation and servers.
+- **Plugin**: Bukkit/Paper plugin module for server-side workflows.
 
-### 🚀 Getting Started
+## Server Compatibility Builds
 
-#### Building from Source
-Requires JDK 21+ and Maven or Gradle.
+Release ZIPs are produced for these server families:
+
+- Folia
+- ShreddedPaper
+- Canvas
+- Horizon
+
+Each server-family package contains the same pasta patching engine plus `SERVER-COMPATIBILITY.txt` so operators can pick the package that matches their staging target.
+
+## Build
+
+Requires JDK 21+ and Maven.
+
 ```bash
-# Maven
 mvn -f folia-phantom/pom.xml clean package
-
-# Gradle (wrapper bootstrap in binary-restricted environments)
-gradle wrapper --gradle-version 8.14.3 --no-validate-url
-./gradlew clean build
 ```
-Binary artifacts will be available in each module's build output directories (`target` for Maven, `build/libs` for Gradle).
 
-#### Using the GUI
-1. Run `Folia-Phantom-GUI-1.0.0.jar`.
-2. Drag and drop your plugin JARs into the window.
-3. Click **Patch All Plugins**.
+## Release Artifacts
 
----
+Create local release ZIPs:
 
-## 日本語 (Japanese)
-
-**Folia Phantom** は、レガシーな Bukkit プラグインと高性能な [Folia](https://github.com/PaperMC/Folia) サーバーの互換性を確保するためのプロフェッショナル向けバイトコード変換ツールです。
-
-クラスファイルを動的に書き換えることで、スレッドセーフでない API 呼び出し（グローバルスケジューラや直接的なブロック操作など）を、Folia がサポートするリージョンベースまたは非同期の操作に自動的に変換します。
-
-### ✨ 主な機能
-
-- **自動パッチ適用**: `BukkitScheduler` や `BukkitRunnable` を Folia のスケジューラにシームレスに変換。
-- **スレッド安全性の強化**: `Block.setType` などの世界操作を、正しいリージョンスレッドで実行するように自動的にラッピング。
-- **モダンな GUI**: 一括処理を容易にする、グラスモーフィズムデザインのプレミアムなデスクトップ UI。
-- **高いパフォーマンス**: `ForkJoinPool` による並列処理と、高速なバイトコードスキャニングによる圧倒的な処理速度。
-- **高い互換性**: JAR 署名を自動的に処理し、`plugin.yml` に `folia-supported` フラグを自動追加。
-- **多様な実行形態**: GUI、CLI、およびサーバーサイドプラグイン（リアルタイム変換）の全形態をサポート。
-
-### 🏗️ プロジェクト構成
-
-- `folia-phantom-core`: ASM トランスフォーマーとパッチロジックを含むコアライブラリ。
-- `folia-phantom-gui`: デスクトップ環境向けのモダンな JavaFX アプリケーション。
-- `folia-phantom-cli`: 自動化ワークフローやヘッドレス環境向けの CLI ツール。
-- `folia-phantom-plugin`: サーバー上でのリアルタイム変換を実現する Bukkit プラグイン。
-
-### 🚀 はじめかた
-
-#### ビルド
-JDK 21 以上と Maven または Gradle が必要です。
-```bash
-# Maven
-mvn -f folia-phantom/pom.xml clean package
-
-# Gradle（バイナリ制限環境向けに wrapper を先に生成）
-gradle wrapper --gradle-version 8.14.3 --no-validate-url
-./gradlew clean build
+```powershell
+.\scripts\release.ps1
 ```
-ビルドされた JAR は各モジュールの出力ディレクトリ（Maven は `target`、Gradle は `build/libs`）に生成されます。
 
-#### GUI の使用方法
-1. `Folia-Phantom-GUI-1.0.0.jar` を実行します。
-2. プラグインの JAR ファイルをウィンドウにドラッグ＆ドロップします。
-3. **Patch All Plugins** をクリックします。
+The generated files are written to `dist/`:
 
----
+- `pasta-folia-windows-gui-<version>.zip`
+- `pasta-folia-linux-gui-<version>.zip`
+- `pasta-folia-cli-<version>.zip`
+- `pasta-shreddedpaper-windows-gui-<version>.zip`
+- `pasta-shreddedpaper-linux-gui-<version>.zip`
+- `pasta-shreddedpaper-cli-<version>.zip`
+- `pasta-canvas-windows-gui-<version>.zip`
+- `pasta-canvas-linux-gui-<version>.zip`
+- `pasta-canvas-cli-<version>.zip`
+- `pasta-horizon-windows-gui-<version>.zip`
+- `pasta-horizon-linux-gui-<version>.zip`
+- `pasta-horizon-cli-<version>.zip`
 
-### 📄 License
-Licensed under the **MARV License**. See `LICENSE` for more details.
-Copyright © 2025 **Marv**.
----
+## Documentation
 
-## Next Safe Profile
+The GitHub Wiki is being removed. All documentation now lives in this repository under `docs/`.
 
-FoliaPhantom now includes a next-generation safe profile for local, auditable patching.
-It adds JAR entry validation, size limits, transformation audit metadata, and a copyright notice inside patched output.
+- [Documentation index](docs/README.md)
+- [Next Safe Profile](docs/next-safe-profile.md)
+- [Release guide](docs/release.md)
 
-See [docs/next-safe-profile.md](docs/next-safe-profile.md) for the security and copyright model.
+## License
+
+Licensed under the MARV License. See [LICENSE](LICENSE).
