@@ -13,8 +13,8 @@
     <artifactId>folia-phantom-core</artifactId>
     <packaging>jar</packaging>
 
-    <name>Folia Phantom Core</name>
-    <description>Core patching logic for Folia Phantom.</description>
+    <name>pasta Core</name>
+    <description>Core patching logic for pasta.</description>
 
     <dependencies>
         <dependency>

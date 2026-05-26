@@ -10,6 +10,8 @@
     </parent>
 
     <artifactId>folia-phantom-gui</artifactId>
+    <name>pasta GUI</name>
+    <description>Desktop GUI for pasta.</description>
 
     <properties>
         <javafx.version>21.0.11</javafx.version>
@@ -34,6 +36,7 @@
     </dependencies>
 
     <build>
+        <finalName>pasta-gui-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

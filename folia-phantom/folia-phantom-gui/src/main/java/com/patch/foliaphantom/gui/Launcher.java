@@ -1,5 +1,5 @@
 /*
- * Folia Phantom - GUI Launcher
+ * pasta - GUI Launcher
  * 
  * Copyright (c) 2025 Marv
  * Licensed under MARV License
@@ -17,7 +17,7 @@ package com.patch.foliaphantom.gui;
  */
 public class Launcher {
     /**
-     * Launches the Folia Phantom GUI.
+     * Launches the pasta GUI.
      * 
      * @param args Command line arguments
      */
