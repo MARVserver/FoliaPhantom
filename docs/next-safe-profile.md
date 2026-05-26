@@ -1,6 +1,6 @@
-# FoliaPhantom Next Safe Profile
+# pasta Next Safe Profile
 
-FoliaPhantom Next Safe is the default patching profile for reducing security and copyright risk while keeping local Folia compatibility patching practical.
+pasta Next Safe is the default patching profile for reducing security and copyright risk while keeping local Folia compatibility patching practical.
 
 ## Security controls
 

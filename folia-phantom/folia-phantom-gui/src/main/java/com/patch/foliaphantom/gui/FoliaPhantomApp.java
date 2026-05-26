@@ -1,5 +1,5 @@
 /*
- * Folia Phantom - Professional GUI Application
+ * pasta - Professional GUI Application
  * 
  * Copyright (c) 2025 Marv
  * Licensed under MARV License
@@ -38,11 +38,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.*;
 
 /**
- * Modern Dashboard-style GUI for Folia Phantom.
+ * Modern Dashboard-style GUI for pasta.
  */
 public class FoliaPhantomApp extends Application {
 
-    private static final String VERSION = "1.4.3";
+    private static final String VERSION = "1.4.4";
 
     // UI Elements
     private TextArea statusArea;
@@ -109,7 +109,7 @@ public class FoliaPhantomApp extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        logInfo("Folia Phantom Dashboard initialized.");
+        logInfo("pasta Dashboard initialized.");
     }
 
     @Override
@@ -123,17 +123,17 @@ public class FoliaPhantomApp extends Application {
         titleBar.setAlignment(Pos.CENTER_LEFT);
         titleBar.setPadding(new Insets(10, 15, 10, 20));
 
-        Label title = new Label("Folia Phantom 👻");
+        Label title = new Label("pasta");
         title.setId("window-title");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button minBtn = new Button("─");
+        Button minBtn = new Button("-");
         minBtn.getStyleClass().add("win-btn");
         minBtn.setOnAction(e -> stage.setIconified(true));
 
-        Button closeBtn = new Button("✕");
+        Button closeBtn = new Button("X");
         closeBtn.getStyleClass().add("win-btn");
         closeBtn.setId("win-close");
         closeBtn.setOnAction(e -> stage.close());
@@ -192,7 +192,7 @@ public class FoliaPhantomApp extends Application {
         // Header Card
         VBox headerCard = new VBox(5);
         headerCard.getStyleClass().add("card");
-        Label welcome = new Label("Welcome to Folia Phantom");
+        Label welcome = new Label("Welcome to pasta");
         welcome.setId("welcome-text");
         Label desc = new Label("Professional bytecode transformer for Folia servers.");
         desc.getStyleClass().add("muted-text");

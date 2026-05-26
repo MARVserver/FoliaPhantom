@@ -7,14 +7,14 @@
     <parent>
         <groupId>com.patch.foliaphantom</groupId>
         <artifactId>folia-phantom</artifactId>
-        <version>1.4.3</version>
+        <version>1.4.4</version>
     </parent>
 
     <artifactId>folia-phantom-cli</artifactId>
     <packaging>jar</packaging>
 
-    <name>Folia Phantom CLI</name>
-    <description>Command-line interface for Folia Phantom.</description>
+    <name>pasta CLI</name>
+    <description>Command-line interface for pasta.</description>
 
     <dependencies>
         <dependency>
@@ -25,7 +25,7 @@
     </dependencies>
 
     <build>
-        <finalName>${project.name}-${project.version}</finalName>
+        <finalName>pasta-cli-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

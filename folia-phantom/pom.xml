@@ -6,10 +6,10 @@
 
     <groupId>com.patch.foliaphantom</groupId>
     <artifactId>folia-phantom</artifactId>
-    <version>1.4.3</version>
+    <version>1.4.4</version>
     <packaging>pom</packaging>
 
-    <name>Folia Phantom</name>
+    <name>pasta</name>
     <description>A tool to patch Bukkit plugins for Folia compatibility.</description>
 
     <modules>
