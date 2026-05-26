@@ -21,6 +21,17 @@ Related projects:
 - **CLI**: Headless command-line tool for automation and servers.
 - **Plugin**: Bukkit/Paper plugin module for server-side workflows.
 
+## Server Compatibility Builds
+
+Release ZIPs are produced for these server families:
+
+- Folia
+- ShreddedPaper
+- Canvas
+- Horizon
+
+Each server-family package contains the same pasta patching engine plus `SERVER-COMPATIBILITY.txt` so operators can pick the package that matches their staging target.
+
 ## Build
 
 Requires JDK 21+ and Maven.
@@ -39,9 +50,18 @@ Create local release ZIPs:
 
 The generated files are written to `dist/`:
 
-- `pasta-windows-gui-<version>.zip`
-- `pasta-linux-gui-<version>.zip`
-- `pasta-cli-<version>.zip`
+- `pasta-folia-windows-gui-<version>.zip`
+- `pasta-folia-linux-gui-<version>.zip`
+- `pasta-folia-cli-<version>.zip`
+- `pasta-shreddedpaper-windows-gui-<version>.zip`
+- `pasta-shreddedpaper-linux-gui-<version>.zip`
+- `pasta-shreddedpaper-cli-<version>.zip`
+- `pasta-canvas-windows-gui-<version>.zip`
+- `pasta-canvas-linux-gui-<version>.zip`
+- `pasta-canvas-cli-<version>.zip`
+- `pasta-horizon-windows-gui-<version>.zip`
+- `pasta-horizon-linux-gui-<version>.zip`
+- `pasta-horizon-cli-<version>.zip`
 
 ## Documentation
 
