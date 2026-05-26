@@ -42,7 +42,7 @@ import java.util.logging.*;
  */
 public class FoliaPhantomApp extends Application {
 
-    private static final String VERSION = "1.4.4";
+    private static final String VERSION = "1.4.5";
 
     // UI Elements
     private TextArea statusArea;
