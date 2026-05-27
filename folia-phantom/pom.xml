@@ -11,7 +11,7 @@
     -->
     <groupId>com.patch</groupId>
     <artifactId>folia-phantom</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
     <packaging>pom</packaging>
     <name>pasta</name>
     <description>Folia Phantom — Bukkit to Folia bytecode transformer</description>
