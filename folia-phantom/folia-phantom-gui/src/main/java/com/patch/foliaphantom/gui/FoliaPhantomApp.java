@@ -170,7 +170,7 @@ public final class FoliaPhantomApp extends Application {
         Label title = new Label("Folia Phantom");
         title.setId("title-label");
 
-        Label version = new Label("pasta v1.0.0");
+        Label version = new Label("pasta v2.0.0");
         version.setId("version-label");
 
         Region spacer = new Region();
@@ -561,7 +561,7 @@ public final class FoliaPhantomApp extends Application {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Label cpRight = new Label("pasta v1.0.0 | Java " + System.getProperty("java.version"));
+        Label cpRight = new Label("pasta v2.0.0 | Java " + System.getProperty("java.version"));
         cpRight.setId("status-bar-right");
 
         bar.getChildren().addAll(statusIcon, statusBarLabel, spacer, cpRight);

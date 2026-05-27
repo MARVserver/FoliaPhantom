@@ -188,7 +188,7 @@ public final class CLI {
         System.out.println("  ██╔══╝  ██║   ██║██║     ██║██╔══██║");
         System.out.println("  ██║     ╚██████╔╝███████╗██║██║  ██║");
         System.out.println("  ╚═╝      ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═╝");
-        System.out.println("  Folia Phantom CLI — pasta v1.0.0");
+        System.out.println("  Folia Phantom CLI — pasta v2.0.0");
         System.out.println("  Bukkit → Folia bytecode transformer");
         System.out.println();
     }
