@@ -1,0 +1,545 @@
+/*
+ * Folia Phantom — GUI スタイルシート（改善版）
+ *
+ * ガラスモーフィズム（Glassmorphism）デザイン + ダークテーマ
+ * カラーパレット: Tailwind Slate 900 (#0f172a) ベース
+ */
+
+/* ========================================================================
+   ルート
+   ======================================================================== */
+
+#root {
+    -fx-background-color: linear-gradient(to bottom right, #0f172a, #1e1b4b);
+    -fx-font-family: "System";
+    -fx-font-size: 13px;
+}
+
+/* ========================================================================
+   タイトルバー
+   ======================================================================== */
+
+#title-bar {
+    -fx-background-color: rgba(30, 41, 59, 0.8);
+    -fx-background-radius: 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 8, 0, 0, 2);
+    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.05) transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+#title-label {
+    -fx-text-fill: #f8fafc;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+#version-label {
+    -fx-text-fill: #64748b;
+    -fx-font-size: 11px;
+    -fx-padding: 2 0 0 4;
+}
+
+.title-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 14px;
+    -fx-cursor: hand;
+    -fx-background-radius: 6;
+    -fx-min-width: 36;
+    -fx-min-height: 26;
+    -fx-max-width: 36;
+    -fx-max-height: 26;
+    -fx-transition: all 0.15s ease;
+}
+
+.title-btn:hover {
+    -fx-background-color: #334155;
+    -fx-text-fill: #f8fafc;
+}
+
+#close-btn {
+    -fx-text-fill: #f87171;
+}
+
+#close-btn:hover {
+    -fx-background-color: #ef4444;
+    -fx-text-fill: #ffffff;
+}
+
+/* ========================================================================
+   サイドバー
+   ======================================================================== */
+
+#sidebar {
+    -fx-background-color: rgba(2, 6, 23, 0.85);
+    -fx-border-color: transparent rgba(255, 255, 255, 0.05) transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+
+#sidebar-title {
+    -fx-text-fill: #64748b;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-letter-spacing: 1.5px;
+    -fx-padding: 0 0 4 0;
+}
+
+/* ---- ファイルリスト ---- */
+
+.list-view {
+    -fx-background-color: rgba(15, 23, 42, 0.6);
+    -fx-border-color: rgba(255, 255, 255, 0.06);
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-padding: 4;
+}
+
+.list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 4 6;
+    -fx-background-radius: 6;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: rgba(30, 41, 59, 0.6);
+    -fx-background-radius: 6;
+}
+
+.list-cell:filled:selected {
+    -fx-background-color: rgba(59, 130, 246, 0.2);
+    -fx-background-radius: 6;
+}
+
+.list-view .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
+}
+
+.list-view .scroll-bar:vertical .thumb {
+    -fx-background-color: #334155;
+    -fx-background-radius: 4;
+}
+
+.list-view .scroll-bar:vertical .decrement-arrow,
+.list-view .scroll-bar:vertical .increment-arrow {
+    -fx-padding: 0;
+}
+
+/* ---- ファイル状態アイコン ---- */
+
+#state-icon-pending {
+    -fx-font-size: 14px;
+}
+
+#state-icon-patching {
+    -fx-font-size: 14px;
+}
+
+#state-icon-success {
+    -fx-font-size: 14px;
+}
+
+#state-icon-error {
+    -fx-font-size: 14px;
+}
+
+#jar-name {
+    -fx-font-size: 12px;
+    -fx-font-weight: normal;
+}
+
+.text-pending {
+    -fx-text-fill: #e2e8f0;
+}
+
+.text-success {
+    -fx-text-fill: #10b981;
+}
+
+.text-error {
+    -fx-text-fill: #ef4444;
+}
+
+/* ---- 削除ボタン ---- */
+
+.remove-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #64748b;
+    -fx-font-size: 10px;
+    -fx-cursor: hand;
+    -fx-background-radius: 4;
+    -fx-min-width: 20;
+    -fx-min-height: 20;
+    -fx-max-width: 20;
+    -fx-max-height: 20;
+    -fx-padding: 0;
+}
+
+.remove-btn:hover {
+    -fx-background-color: rgba(239, 68, 68, 0.2);
+    -fx-text-fill: #ef4444;
+}
+
+/* ---- サイドバーボタン ---- */
+
+#add-btn {
+    -fx-background-color: rgba(30, 41, 59, 0.8);
+    -fx-text-fill: #3b82f6;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-background-radius: 8;
+    -fx-padding: 10 16;
+    -fx-border-color: rgba(59, 130, 246, 0.4);
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-cursor: hand;
+    -fx-transition: all 0.15s ease;
+}
+
+#add-btn:hover {
+    -fx-background-color: rgba(59, 130, 246, 0.15);
+    -fx-border-color: #3b82f6;
+}
+
+#clear-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #ef4444;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-background-radius: 8;
+    -fx-padding: 10 16;
+    -fx-border-color: rgba(239, 68, 68, 0.4);
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-cursor: hand;
+    -fx-transition: all 0.15s ease;
+}
+
+#clear-btn:hover {
+    -fx-background-color: rgba(239, 68, 68, 0.1);
+    -fx-border-color: #ef4444;
+}
+
+/* ========================================================================
+   中央ペイン
+   ======================================================================== */
+
+#welcome-label {
+    -fx-text-fill: linear-gradient(to right, #f8fafc, #93c5fd);
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+#subtitle-label {
+    -fx-text-fill: #64748b;
+    -fx-font-size: 13px;
+}
+
+/* ---- セクション共通 ---- */
+
+#config-section, #progress-section, #console-section {
+    -fx-background-color: rgba(30, 41, 59, 0.5);
+    -fx-background-radius: 14;
+    -fx-border-color: rgba(255, 255, 255, 0.04);
+    -fx-border-radius: 14;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 12, 0, 0, 4);
+    -fx-transition: all 0.2s ease;
+}
+
+#section-title {
+    -fx-text-fill: #64748b;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-letter-spacing: 1.5px;
+}
+
+/* ---- 設定 ---- */
+
+#verbose-check {
+    -fx-text-fill: #e2e8f0;
+    -fx-font-size: 12px;
+}
+
+#verbose-check .box {
+    -fx-background-color: rgba(30, 41, 59, 0.8);
+    -fx-border-color: #475569;
+    -fx-border-radius: 4;
+    -fx-padding: 2;
+}
+
+#verbose-check:selected .mark {
+    -fx-background-color: #3b82f6;
+}
+
+#verbose-check:selected .box {
+    -fx-border-color: #3b82f6;
+}
+
+.text-field {
+    -fx-background-color: rgba(15, 23, 42, 0.8);
+    -fx-text-fill: #e2e8f0;
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(51, 65, 85, 0.6);
+    -fx-border-radius: 8;
+    -fx-padding: 8 12;
+    -fx-font-size: 12px;
+    -fx-transition: border-color 0.15s ease;
+}
+
+.text-field:focused {
+    -fx-border-color: #3b82f6;
+    -fx-effect: dropshadow(gaussian, rgba(59, 130, 246, 0.15), 6, 0, 0, 0);
+}
+
+.label {
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 12px;
+}
+
+#browse-btn {
+    -fx-background-color: rgba(30, 41, 59, 0.8);
+    -fx-text-fill: #3b82f6;
+    -fx-background-radius: 8;
+    -fx-padding: 8 16;
+    -fx-cursor: hand;
+    -fx-border-color: rgba(51, 65, 85, 0.6);
+    -fx-border-radius: 8;
+    -fx-transition: all 0.15s ease;
+}
+
+#browse-btn:hover {
+    -fx-background-color: rgba(59, 130, 246, 0.1);
+    -fx-border-color: #3b82f6;
+}
+
+/* ---- プログレス ---- */
+
+#progress-bar {
+    -fx-accent: linear-gradient(to right, #3b82f6, #6366f1);
+    -fx-background-color: rgba(15, 23, 42, 0.6);
+    -fx-background-radius: 8;
+}
+
+#progress-bar .track {
+    -fx-background-color: rgba(15, 23, 42, 0.6);
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(255, 255, 255, 0.03);
+    -fx-border-radius: 8;
+}
+
+#progress-bar .bar {
+    -fx-background-color: linear-gradient(to right, #3b82f6, #6366f1);
+    -fx-background-radius: 8;
+    -fx-effect: dropshadow(gaussian, rgba(59, 130, 246, 0.4), 8, 0, 0, 0);
+}
+
+#progress-label {
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 12px;
+}
+
+#execute-btn {
+    -fx-background-color: linear-gradient(to right, #3b82f6, #6366f1);
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+    -fx-background-radius: 10;
+    -fx-padding: 12 32;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(59, 130, 246, 0.3), 10, 0, 0, 2);
+    -fx-transition: all 0.15s ease;
+}
+
+#execute-btn:hover {
+    -fx-opacity: 0.92;
+    -fx-effect: dropshadow(gaussian, rgba(59, 130, 246, 0.5), 14, 0, 0, 4);
+    -fx-translate-y: -1;
+}
+
+#execute-btn:pressed {
+    -fx-translate-y: 0;
+    -fx-opacity: 0.85;
+}
+
+#execute-btn:disabled {
+    -fx-opacity: 0.4;
+    -fx-cursor: default;
+    -fx-effect: none;
+}
+
+#open-results-btn {
+    -fx-background-color: rgba(16, 185, 129, 0.9);
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+    -fx-background-radius: 10;
+    -fx-padding: 12 24;
+    -fx-cursor: hand;
+    -fx-transition: all 0.15s ease;
+}
+
+#open-results-btn:hover {
+    -fx-background-color: #10b981;
+    -fx-effect: dropshadow(gaussian, rgba(16, 185, 129, 0.3), 8, 0, 0, 2);
+}
+
+#open-results-btn:disabled {
+    -fx-opacity: 0.35;
+    -fx-cursor: default;
+    -fx-effect: none;
+}
+
+#file-badge {
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 12px;
+    -fx-padding: 0 0 0 12;
+    -fx-background-color: rgba(30, 41, 59, 0.5);
+    -fx-background-radius: 12;
+    -fx-padding: 4 12;
+}
+
+/* ---- コンソール ---- */
+
+#console-section {
+    -fx-background-color: rgba(30, 41, 59, 0.5);
+}
+
+#console-area {
+    -fx-background-color: rgba(2, 6, 23, 0.9);
+    -fx-text-fill: #10b981;
+    -fx-background-radius: 10;
+    -fx-border-color: rgba(255, 255, 255, 0.03);
+    -fx-border-radius: 10;
+    -fx-font-family: "Consolas";
+    -fx-font-size: 12px;
+    -fx-padding: 8;
+    -fx-control-inner-background: rgba(2, 6, 23, 0.9);
+    -fx-highlight-fill: rgba(59, 130, 246, 0.3);
+}
+
+#console-area .content {
+    -fx-background-color: transparent;
+}
+
+#console-area .scroll-pane {
+    -fx-background-color: transparent;
+}
+
+#console-area .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
+}
+
+#console-area .scroll-bar:vertical .thumb {
+    -fx-background-color: #334155;
+    -fx-background-radius: 4;
+}
+
+#console-area .scroll-bar:vertical .decrement-arrow,
+#console-area .scroll-bar:vertical .increment-arrow {
+    -fx-padding: 0;
+}
+
+#console-clear-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #64748b;
+    -fx-font-size: 11px;
+    -fx-cursor: hand;
+    -fx-background-radius: 6;
+    -fx-padding: 4 12;
+    -fx-border-color: rgba(100, 116, 139, 0.3);
+    -fx-border-radius: 6;
+    -fx-transition: all 0.15s ease;
+}
+
+#console-clear-btn:hover {
+    -fx-background-color: rgba(100, 116, 139, 0.15);
+    -fx-border-color: #64748b;
+    -fx-text-fill: #e2e8f0;
+}
+
+/* ========================================================================
+   ステータスバー
+   ======================================================================== */
+
+#status-bar {
+    -fx-background-color: rgba(2, 6, 23, 0.9);
+    -fx-border-color: rgba(255, 255, 255, 0.03) transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+#status-icon {
+    -fx-font-size: 10px;
+}
+
+#status-bar-label {
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 11px;
+}
+
+#status-bar-right {
+    -fx-text-fill: #475569;
+    -fx-font-size: 10px;
+}
+
+/* ========================================================================
+   ダイアログ
+   ======================================================================== */
+
+#dialog-root {
+    -fx-background-color: #0f172a;
+}
+
+.dialog-pane {
+    -fx-background-color: #0f172a;
+    -fx-text-fill: #e2e8f0;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: rgba(30, 41, 59, 0.8);
+    -fx-padding: 16 20;
+}
+
+.dialog-pane .header-panel .label {
+    -fx-text-fill: #f8fafc;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.dialog-pane .content {
+    -fx-text-fill: #94a3b8;
+    -fx-font-size: 12px;
+}
+
+.dialog-pane .button-bar .button {
+    -fx-background-color: rgba(30, 41, 59, 0.8);
+    -fx-text-fill: #e2e8f0;
+    -fx-background-radius: 8;
+    -fx-padding: 8 20;
+    -fx-cursor: hand;
+    -fx-border-color: rgba(255, 255, 255, 0.06);
+    -fx-border-radius: 8;
+}
+
+.dialog-pane .button-bar .button:hover {
+    -fx-background-color: #334155;
+}
+
+/* ========================================================================
+   スクロールバー共通
+   ======================================================================== */
+
+.scroll-bar:horizontal {
+    -fx-background-color: transparent;
+    -fx-pref-height: 8;
+}
+
+.scroll-bar:horizontal .thumb {
+    -fx-background-color: #334155;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar:horizontal .decrement-arrow,
+.scroll-bar:horizontal .increment-arrow {
+    -fx-padding: 0;
+}

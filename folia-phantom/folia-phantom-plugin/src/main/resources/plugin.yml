@@ -1,0 +1,26 @@
+name: FoliaPhantom
+version: 1.0.0
+main: com.patch.foliaphantom.plugin.FoliaPhantomPlugin
+api-version: '1.21'
+author: Patch
+folia-supported: true
+
+commands:
+  foliapatch:
+    description: Manage plugin patching operations
+    usage: |
+      /<command> <plugin-name> - Patch a specific plugin
+      /<command> list - List all patchable plugins
+      /<command> status - Show patching statistics
+    permission: foliaphantom.patch
+    aliases: [fpatch, fp]
+
+permissions:
+  foliaphantom.patch:
+    description: Allows patching plugins
+    default: op
+  foliaphantom.admin:
+    description: Full access to all FoliaPhantom features
+    default: op
+    children:
+      foliaphantom.patch: true

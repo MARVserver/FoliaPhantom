@@ -1,0 +1,34 @@
+# FoliaPhantom Configuration
+# pasta v1.0.0
+
+auto-patch:
+  # 自動パッチ機能を有効にするか
+  enabled: true
+  # 監視するフォルダ（サーバールートからの相対パス）
+  watch-folder: 'plugins/folia-patch-queue'
+  # パッチ済みプラグインの出力先
+  output-folder: 'plugins/patched'
+  # チェック間隔（秒）
+  check-interval: 5
+
+logging:
+  level: INFO
+  verbose: false
+  log-success: true
+  log-skipped: true
+
+filters:
+  # 既に folia-supported のプラグインをスキップ
+  skip-folia-supported: true
+  # ホワイトリスト（空 = すべて許可）
+  whitelist: []
+  # ブラックリスト
+  blacklist: []
+
+advanced:
+  # パッチ成功後に元ファイルを削除
+  delete-original: false
+  # パッチ前にバックアップを作成
+  create-backup: true
+  # バックアップ保存先
+  backup-folder: 'plugins/folia-phantom-backups'

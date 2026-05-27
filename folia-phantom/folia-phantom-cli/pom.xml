@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.patch</groupId>
+        <artifactId>folia-phantom</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>folia-phantom-cli</artifactId>
+    <name>pasta-cli</name>
+    <description>Command-line interface for patching plugins</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.patch</groupId>
+            <artifactId>folia-phantom-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- SLF4J Simple: CLIスタンドアロン実行用ロガー実装 -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.9</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>Folia-Phantom-CLI-${project.version}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <configuration>
+                    <transformers>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                            <mainClass>com.patch.foliaphantom.cli.CLI</mainClass>
+                        </transformer>
+                    </transformers>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
