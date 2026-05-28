@@ -9,14 +9,19 @@ import org.objectweb.asm.tree.MethodNode;
 import java.util.List;
 
 /**
- * ワールド生成関連の API 呼び出しを非同期化するトランスフォーマー。
+ * ワールド生成関連 + ワールド操作の API 呼び出しを非同期化するトランスフォーマー。
  *
- * <p>Folia ではワールド生成は専用スレッドで行う必要がある。
+ * <p>Folia ではワールド操作は適切なリージョンスケジューラ上で行う必要がある。
  * 本トランスフォーマーは以下の呼び出しを変換する:
  * <ul>
  *   <li>{@code Bukkit.createWorld(WorldCreator)} → {@code FoliaPatcher.createWorld(WorldCreator)}</li>
  *   <li>{@code new WorldCreator(name).createWorld()} → {@code FoliaPatcher.createWorld(WorldCreator)}</li>
  *   <li>{@code plugin.getDefaultWorldGenerator(name, id)} → {@code FoliaPatcher.getDefaultWorldGenerator(plugin, name, id)}</li>
+ *   <li>{@code World.spawn(Location, Class)} → {@code FoliaPatcher.safeSpawn(location, clazz)}</li>
+ *   <li>{@code World.dropItem(Location, ItemStack)} → {@code FoliaPatcher.safeDropItem(location, item)}</li>
+ *   <li>{@code World.dropItemNaturally(Location, ItemStack)} → {@code FoliaPatcher.safeDropItemNaturally(location, item)}</li>
+ *   <li>{@code World.createExplosion(Location, float)} → {@code FoliaPatcher.safeCreateExplosion(location, power)}</li>
+ *   <li>{@code World.strikeLightning(Location)} → {@code FoliaPatcher.safeStrikeLightning(location)}</li>
  * </ul>
  * </p>
  */
@@ -31,6 +36,9 @@ public final class WorldGenClassTransformer implements ClassTransformer, Opcodes
     /** Plugin クラスの内部名 */
     private static final String PLUGIN_OWNER = "org/bukkit/plugin/Plugin";
 
+    /** World クラスの内部名 */
+    private static final String WORLD_OWNER = "org/bukkit/World";
+
     /** FoliaPatcher の内部名 */
     private static final String PATCHER_OWNER = "com/patch/foliaphantom/patcher/FoliaPatcher";
 
@@ -43,17 +51,41 @@ public final class WorldGenClassTransformer implements ClassTransformer, Opcodes
     /** Plugin.getDefaultWorldGenerator メソッド名 */
     private static final String GET_DEFAULT_WORLD_GENERATOR = "getDefaultWorldGenerator";
 
-    /** FoliaPatcher.createWorld の記述子: {@code (Lorg/bukkit/WorldCreator;)Lorg/bukkit/World;} */
+    /** FoliaPatcher.createWorld の記述子 */
     private static final String CREATE_WORLD_DESC =
             "(Lorg/bukkit/WorldCreator;)Lorg/bukkit/World;";
 
-    /** FoliaPatcher.getDefaultWorldGenerator の記述子: {@code (Lorg/bukkit/plugin/Plugin;Ljava/lang/String;Ljava/lang/String;)Lorg/bukkit/generator/ChunkGenerator;} */
+    /** FoliaPatcher.getDefaultWorldGenerator の記述子 */
     private static final String GET_DEFAULT_WORLD_GENERATOR_DESC =
             "(Lorg/bukkit/plugin/Plugin;Ljava/lang/String;Ljava/lang/String;)Lorg/bukkit/generator/ChunkGenerator;";
 
+    /** safeSpawn の記述子 */
+    private static final String SPAWN_DESC =
+            "(Lorg/bukkit/Location;Ljava/lang/Class;)Lorg/bukkit/entity/Entity;";
+
+    /** safeDropItem の記述子 */
+    private static final String DROP_ITEM_DESC =
+            "(Lorg/bukkit/Location;Lorg/bukkit/inventory/ItemStack;)Lorg/bukkit/entity/Item;";
+
+    /** safeDropItemNaturally の記述子 */
+    private static final String DROP_ITEM_NATURALLY_DESC =
+            "(Lorg/bukkit/Location;Lorg/bukkit/inventory/ItemStack;)Lorg/bukkit/entity/Item;";
+
+    /** safeCreateExplosion の記述子（float のみ） */
+    private static final String EXPLOSION_1_DESC =
+            "(Lorg/bukkit/Location;F)Z";
+
+    /** safeCreateExplosion の記述子（float + boolean） */
+    private static final String EXPLOSION_2_DESC =
+            "(Lorg/bukkit/Location;FZ)Z";
+
+    /** safeStrikeLightning の記述子 */
+    private static final String STRIKE_LIGHTNING_DESC =
+            "(Lorg/bukkit/Location;)Lorg/bukkit/entity/LightningStrike;";
+
     /**
      * クラスノード内の全メソッドを走査し、
-     * ワールド生成関連の呼び出しを変換する。
+     * ワールド生成/操作関連の呼び出しを変換する。
      *
      * @param classNode  変換対象のクラスノード
      * @param className  クラス内部名
@@ -75,7 +107,7 @@ public final class WorldGenClassTransformer implements ClassTransformer, Opcodes
     }
 
     /**
-     * 単一メソッド内のワールド生成関連呼び出しを置き換える。
+     * 単一メソッド内のワールド生成/操作関連呼び出しを置き換える。
      *
      * @param method 変換対象のメソッドノード
      */
@@ -84,6 +116,7 @@ public final class WorldGenClassTransformer implements ClassTransformer, Opcodes
         for (AbstractInsnNode insn : insns) {
             if (insn instanceof MethodInsnNode methodInsn) {
                 replaceIfWorldGenCall(methodInsn);
+                replaceIfWorldOperation(methodInsn);
             }
         }
     }
@@ -123,5 +156,98 @@ public final class WorldGenClassTransformer implements ClassTransformer, Opcodes
             methodInsn.setOpcode(INVOKESTATIC);
             methodInsn.itf = false;
         }
+    }
+
+    /**
+     * World インスタンスメソッドの呼び出しを変換する。
+     */
+    private void replaceIfWorldOperation(MethodInsnNode methodInsn) {
+        if (!WORLD_OWNER.equals(methodInsn.owner)) {
+            return;
+        }
+        String name = methodInsn.name;
+        int argCount = getArgumentCount(methodInsn.desc);
+
+        // World.spawn(Location, Class) → safeSpawn(Location, Class)
+        if ("spawn".equals(name) && argCount >= 2) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeSpawn";
+            methodInsn.desc = SPAWN_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // World.dropItem(Location, ItemStack) → safeDropItem(Location, ItemStack)
+        if ("dropItem".equals(name)) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeDropItem";
+            methodInsn.desc = DROP_ITEM_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // World.dropItemNaturally(Location, ItemStack) → safeDropItemNaturally(Location, ItemStack)
+        if ("dropItemNaturally".equals(name)) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeDropItemNaturally";
+            methodInsn.desc = DROP_ITEM_NATURALLY_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // World.createExplosion(Location, float) → safeCreateExplosion(Location, float)
+        if ("createExplosion".equals(name) && argCount == 2) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeCreateExplosion";
+            methodInsn.desc = EXPLOSION_1_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // World.createExplosion(Location, float, boolean) → safeCreateExplosion(Location, float, boolean)
+        if ("createExplosion".equals(name) && argCount >= 3) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeCreateExplosion";
+            methodInsn.desc = EXPLOSION_2_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // World.strikeLightning(Location) → safeStrikeLightning(Location)
+        if ("strikeLightning".equals(name)) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeStrikeLightning";
+            methodInsn.desc = STRIKE_LIGHTNING_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+        }
+    }
+
+    /**
+     * メソッド記述子から引数の数を取得する。
+     */
+    private static int getArgumentCount(String desc) {
+        int count = 0;
+        int i = 1;
+        while (desc.charAt(i) != ')') {
+            count++;
+            char c = desc.charAt(i);
+            if (c == 'L') {
+                i = desc.indexOf(';', i) + 1;
+            } else if (c == '[') {
+                i++;
+                while (desc.charAt(i) == '[') {
+                    i++;
+                }
+                if (desc.charAt(i) == 'L') {
+                    i = desc.indexOf(';', i) + 1;
+                } else {
+                    i++;
+                }
+            } else {
+                i++;
+            }
+        }
+        return count;
     }
 }

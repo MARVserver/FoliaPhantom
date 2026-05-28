@@ -2,6 +2,7 @@ package com.patch.foliaphantom.patcher;
 
 import com.patch.foliaphantom.transformer.ClassTransformer;
 import com.patch.foliaphantom.transformer.EntitySchedulerTransformer;
+import com.patch.foliaphantom.transformer.PlayerSafetyTransformer;
 import com.patch.foliaphantom.transformer.SchedulerClassTransformer;
 import com.patch.foliaphantom.transformer.ScanningClassVisitor;
 import com.patch.foliaphantom.transformer.ThreadSafetyTransformer;
@@ -91,10 +92,11 @@ public final class PluginPatcher {
      *
      * <p>適用順序:
      * <ol>
-     *   <li>{@link ThreadSafetyTransformer}</li>
-     *   <li>{@link WorldGenClassTransformer}</li>
-     *   <li>{@link EntitySchedulerTransformer}</li>
-     *   <li>{@link SchedulerClassTransformer}</li>
+     *   <li>{@link ThreadSafetyTransformer} — Block 書き込み操作のスレッドセーフ化</li>
+     *   <li>{@link WorldGenClassTransformer} — World 生成/操作の非同期化</li>
+     *   <li>{@link EntitySchedulerTransformer} — Entity/LivingEntity 操作のスレッドセーフ化</li>
+     *   <li>{@link PlayerSafetyTransformer} — Player/Inventory 操作のスレッドセーフ化</li>
+     *   <li>{@link SchedulerClassTransformer} — BukkitScheduler/BukkitRunnable の置き換え</li>
      * </ol>
      * </p>
      */
@@ -102,6 +104,7 @@ public final class PluginPatcher {
         this.transformers.add(new ThreadSafetyTransformer());
         this.transformers.add(new WorldGenClassTransformer());
         this.transformers.add(new EntitySchedulerTransformer());
+        this.transformers.add(new PlayerSafetyTransformer());
         this.transformers.add(new SchedulerClassTransformer());
     }
 

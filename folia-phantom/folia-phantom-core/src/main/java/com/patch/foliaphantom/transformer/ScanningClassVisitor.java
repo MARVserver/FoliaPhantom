@@ -39,6 +39,23 @@ public final class ScanningClassVisitor extends ClassVisitor {
         "org/bukkit/plugin/Plugin"
     );
 
+    /** Folia API 全体対応で追加された検出対象の所有者 */
+    private static final Set<String> EXTENDED_TARGET_OWNERS = Set.of(
+        "org/bukkit/entity/Entity",
+        "org/bukkit/entity/LivingEntity",
+        "org/bukkit/entity/Player",
+        "org/bukkit/World"
+    );
+
+    /** 検出対象の全所有者（基本 + 拡張） */
+    private static final Set<String> ALL_TARGET_OWNERS;
+
+    static {
+        Set<String> all = new java.util.HashSet<>(TARGET_OWNERS);
+        all.addAll(EXTENDED_TARGET_OWNERS);
+        ALL_TARGET_OWNERS = java.util.Collections.unmodifiableSet(all);
+    }
+
     /** {@code Block.setType} のメソッド名 */
     private static final String BLOCK_SET_TYPE = "setType";
 
@@ -47,6 +64,58 @@ public final class ScanningClassVisitor extends ClassVisitor {
 
     /** {@code Plugin.getDefaultWorldGenerator} のメソッド名 */
     private static final String GET_DEFAULT_WORLD_GENERATOR = "getDefaultWorldGenerator";
+
+    /** Block の書き込み操作メソッド名一覧 */
+    private static final Set<String> BLOCK_WRITE_METHODS = Set.of(
+        "setType",
+        "setBlockData",
+        "breakNaturally",
+        "applyBoneMeal"
+    );
+
+    /** World の書き込み操作メソッド名一覧 */
+    private static final Set<String> WORLD_WRITE_METHODS = Set.of(
+        "spawn",
+        "dropItem",
+        "dropItemNaturally",
+        "createExplosion",
+        "strikeLightning",
+        "setTime",
+        "setStorm",
+        "setThundering",
+        "setGameRule"
+    );
+
+    /** Entity の書き込み操作メソッド名一覧 */
+    private static final Set<String> ENTITY_WRITE_METHODS = Set.of(
+        "teleport",
+        "remove",
+        "setFireTicks",
+        "setVelocity",
+        "setGravity",
+        "setInvulnerable",
+        "setGlowing",
+        "setSilent"
+    );
+
+    /** LivingEntity の書き込み操作メソッド名一覧 */
+    private static final Set<String> LIVING_ENTITY_WRITE_METHODS = Set.of(
+        "damage",
+        "setHealth",
+        "addPotionEffect",
+        "removePotionEffect",
+        "setMaxHealth"
+    );
+
+    /** Player の書き込み操作メソッド名一覧 */
+    private static final Set<String> PLAYER_WRITE_METHODS = Set.of(
+        "openInventory",
+        "closeInventory",
+        "kickPlayer",
+        "setGameMode",
+        "setAllowFlight",
+        "setFlying"
+    );
 
     /** BukkitRunnable のインスタンスメソッド一覧 */
     private static final Set<String> BUKKIT_RUNNABLE_INSTANCE_METHODS = Set.of(
@@ -151,16 +220,33 @@ public final class ScanningClassVisitor extends ClassVisitor {
          * @return 対象の呼び出しであれば true
          */
         private boolean isTargetOwner(String owner, String name) {
-            // 完全一致の対象所有者
+            // 完全一致の対象所有者（基本セット）
             if (TARGET_OWNERS.contains(owner)) {
                 return true;
             }
             // BukkitRunnable インスタンスメソッドの検出
             if (BUKKIT_RUNNABLE_INSTANCE_METHODS.contains(name)
                     && "java/lang/Runnable".equals(owner)) {
-                // 注意: 実際の INVOKEVIRTUAL では owner がサブクラスになるため、
-                // より精確な判定は SchedulerClassTransformer で行う
                 return false;
+            }
+            // 拡張対象所有者の検出 + メソッド名の絞り込み
+            if ("org/bukkit/entity/Entity".equals(owner)) {
+                return ENTITY_WRITE_METHODS.contains(name);
+            }
+            if ("org/bukkit/entity/LivingEntity".equals(owner)) {
+                return LIVING_ENTITY_WRITE_METHODS.contains(name);
+            }
+            if ("org/bukkit/entity/Player".equals(owner)) {
+                return PLAYER_WRITE_METHODS.contains(name);
+            }
+            if ("org/bukkit/World".equals(owner)) {
+                return WORLD_WRITE_METHODS.contains(name)
+                        || "createWorld".equals(name);
+            }
+            // Block の書き込み操作
+            if ("org/bukkit/block/Block".equals(owner)
+                    && BLOCK_WRITE_METHODS.contains(name)) {
+                return true;
             }
             return false;
         }

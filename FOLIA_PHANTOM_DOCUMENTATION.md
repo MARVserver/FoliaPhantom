@@ -77,10 +77,29 @@ folia-phantom（parent pom）
 
 | 順序 | トランスフォーマー | 役割 |
 |------|-------------------|------|
-| 1st | `ThreadSafetyTransformer` | `Block.setType` の安全ラッピング |
-| 2nd | `WorldGenClassTransformer` | `WorldCreator` / `getDefaultWorldGenerator` の非同期化 |
-| 3rd | `EntitySchedulerTransformer` | Entity スケジューラ（拡張用、現状は空） |
-| 4th | `SchedulerClassTransformer` | `BukkitScheduler` / `BukkitRunnable` の置き換え |
+| 1st | `ThreadSafetyTransformer` | Block 書き込み操作全般の安全ラッピング（`setType`, `setBlockData`, `breakNaturally`, `applyBoneMeal`） |
+| 2nd | `WorldGenClassTransformer` | World 生成・操作の非同期化（`createWorld`, `spawn`, `dropItem`, `createExplosion`, `strikeLightning`） |
+| 3rd | `EntitySchedulerTransformer` | Entity / LivingEntity 操作のスレッドセーフ化（`teleport`, `remove`, `damage`, `setHealth`, `addPotionEffect`） |
+| 4th | `PlayerSafetyTransformer` | Player / Inventory 操作のスレッドセーフ化（`openInventory`, `closeInventory`, `kickPlayer`, `setGameMode`） |
+| 5th | `SchedulerClassTransformer` | `BukkitScheduler` / `BukkitRunnable` の置き換え |
+
+### 2.2.1 ScanningClassVisitor が検出する変換トリガー（拡張版）
+
+以下いずれかのメソッド呼び出しがクラス内に存在する場合、`needsPatching = true`:
+
+**基本検出セット:**
+- `org/bukkit/scheduler/BukkitScheduler` の任意メソッド
+- `org/bukkit/scheduler/BukkitRunnable` の任意メソッド
+- `org/bukkit/WorldCreator` の任意メソッド
+- `org/bukkit/block/Block` の `setType` / `setBlockData` / `breakNaturally` / `applyBoneMeal`
+- `org/bukkit/Bukkit` の任意メソッド
+- `org/bukkit/plugin/Plugin` の任意メソッド
+
+**拡張検出セット（Folia API 全体対応）:**
+- `org/bukkit/entity/Entity`: `teleport` / `remove` / `setFireTicks` / `setVelocity` / `setGravity` / `setInvulnerable` / `setGlowing` / `setSilent`
+- `org/bukkit/entity/LivingEntity`: `damage` / `setHealth` / `addPotionEffect` / `removePotionEffect` / `setMaxHealth`
+- `org/bukkit/entity/Player`: `openInventory` / `closeInventory` / `kickPlayer` / `setGameMode` / `setAllowFlight` / `setFlying`
+- `org/bukkit/World`: `spawn` / `dropItem` / `dropItemNaturally` / `createExplosion` / `strikeLightning` / `setTime` / `setStorm` / `setThundering` / `setGameRule`
 
 ### 2.3 FoliaPatcher（ランタイムブリッジ）の提供する機能
 
@@ -125,6 +144,70 @@ public static void safeSetTypeWithPhysics(Block block, Material material, boolea
     // 同様のスレッドチェック + RegionScheduler
 }
 ```
+
+#### Block 操作全般のスレッドセーフラッパー
+
+`ThreadSafetyTransformer` により以下が変換される:
+
+| 変換元（Block インスタンスメソッド） | 変換先（FoliaPatcher 静的メソッド） |
+|---------------------------------------|--------------------------------------|
+| `block.setType(material)` | `FoliaPatcher.safeSetType(block, material)` |
+| `block.setType(material, applyPhysics)` | `FoliaPatcher.safeSetTypeWithPhysics(block, material, applyPhysics)` |
+| `block.setBlockData(data)` | `FoliaPatcher.safeSetBlockData(block, data)` |
+| `block.setBlockData(data, applyPhysics)` | `FoliaPatcher.safeSetBlockData(block, data, applyPhysics)` |
+| `block.breakNaturally()` | `FoliaPatcher.safeBreakNaturally(block)` |
+| `block.breakNaturally(tool)` | `FoliaPatcher.safeBreakNaturally(block, tool)` |
+| `block.applyBoneMeal(face)` | `FoliaPatcher.safeApplyBoneMeal(block, face)` |
+
+戻り値を伴う操作（`breakNaturally`, `applyBoneMeal`）は `CompletableFuture` を用いて同期的に結果を返す。
+読み取り専用操作（`getState`, `getBlockData`, `getDrops`）はそのまま直接実行される。
+
+#### Entity 操作のスレッドセーフラッパー
+
+`EntitySchedulerTransformer` により以下が変換される:
+
+| 変換元（インスタンスメソッド） | 変換先（FoliaPatcher 静的メソッド） |
+|-------------------------------|--------------------------------------|
+| `entity.teleport(location)` | `FoliaPatcher.safeTeleport(entity, location)` |
+| `entity.teleport(location, cause)` | `FoliaPatcher.safeTeleport(entity, location, cause)` |
+| `entity.remove()` | `FoliaPatcher.safeRemove(entity)` |
+| `entity.setFireTicks(ticks)` | `FoliaPatcher.safeSetFireTicks(entity, ticks)` |
+| `entity.setVelocity(vector)` | `FoliaPatcher.safeSetVelocity(entity, vector)` |
+| `livingEntity.damage(amount)` | `FoliaPatcher.safeDamage(entity, amount)` |
+| `livingEntity.damage(amount, damager)` | `FoliaPatcher.safeDamage(entity, amount, damager)` |
+| `livingEntity.setHealth(health)` | `FoliaPatcher.safeSetHealth(entity, health)` |
+| `livingEntity.addPotionEffect(effect)` | `FoliaPatcher.safeAddPotionEffect(entity, effect)` |
+| `livingEntity.addPotionEffect(effect, force)` | `FoliaPatcher.safeAddPotionEffect(entity, effect, force)` |
+
+内部で `Entity.getScheduler().execute()` を使用し、エンティティを所有する正しいリージョンスレッドにルーティングされる。
+
+#### World 操作のスレッドセーフラッパー
+
+`WorldGenClassTransformer` により以下が変換される:
+
+| 変換元（World インスタンスメソッド） | 変換先（FoliaPatcher 静的メソッド） |
+|---------------------------------------|--------------------------------------|
+| `world.spawn(location, class)` | `FoliaPatcher.safeSpawn(location, class)` |
+| `world.dropItem(location, item)` | `FoliaPatcher.safeDropItem(location, item)` |
+| `world.dropItemNaturally(location, item)` | `FoliaPatcher.safeDropItemNaturally(location, item)` |
+| `world.createExplosion(location, power)` | `FoliaPatcher.safeCreateExplosion(location, power)` |
+| `world.createExplosion(location, power, fire)` | `FoliaPatcher.safeCreateExplosion(location, power, fire)` |
+| `world.strikeLightning(location)` | `FoliaPatcher.safeStrikeLightning(location)` |
+
+内部で `RegionScheduler.run()` を使用し、Location を所有するリージョンスレッドにルーティングされる。
+
+#### Player / Inventory 操作のスレッドセーフラッパー
+
+`PlayerSafetyTransformer` により以下が変換される:
+
+| 変換元（Player インスタンスメソッド） | 変換先（FoliaPatcher 静的メソッド） |
+|----------------------------------------|--------------------------------------|
+| `player.openInventory(inventory)` | `FoliaPatcher.safeOpenInventory(player, inventory)` |
+| `player.closeInventory()` | `FoliaPatcher.safeCloseInventory(player)` |
+| `player.kickPlayer(message)` | `FoliaPatcher.safeKickPlayer(player, message)` |
+| `player.setGameMode(gameMode)` | `FoliaPatcher.safeSetGameMode(player, gameMode)` |
+
+内部で `Entity.getScheduler().execute()` を使用し、プレイヤーエンティティを所有する正しいリージョンスレッドにルーティングされる。
 
 #### ワールド生成
 
@@ -509,6 +592,86 @@ plugin.getDefaultWorldGenerator(worldName, id);
 FoliaPatcher.getDefaultWorldGenerator(plugin, worldName, id);
 // FoliaChunkGenerator でラップして返す
 ```
+
+### 6.5 Block 操作全般のスレッドセーフ化
+
+**変換前**:
+```java
+block.setBlockData(data);
+block.breakNaturally(tool);
+block.applyBoneMeal(face);
+```
+
+**変換後**:
+```java
+FoliaPatcher.safeSetBlockData(block, data);
+FoliaPatcher.safeBreakNaturally(block, tool);
+FoliaPatcher.safeApplyBoneMeal(block, face);
+```
+
+内部で `isOwningRegion()` により現在のスレッドがブロックのリージョンを所有しているか判定し、
+所有していなければ `RegionScheduler.run()` で正しいリージョンにルーティングする。
+
+### 6.6 Entity 操作のスレッドセーフ化
+
+**変換前**:
+```java
+entity.teleport(location);
+livingEntity.damage(10.0);
+livingEntity.setHealth(20.0);
+```
+
+**変換後**:
+```java
+FoliaPatcher.safeTeleport(entity, location);
+FoliaPatcher.safeDamage(livingEntity, 10.0);
+FoliaPatcher.safeSetHealth(livingEntity, 20.0);
+```
+
+内部で `isOwningRegion()` により現在のスレッドがエンティティのリージョンを所有しているか判定し、
+所有していなければ `Entity.getScheduler().execute()` でエンティティのリージョンスレッドにルーティングする。
+
+**EntityScheduler 使用の利点**:
+- エンティティがテレポートしても正しいスレッドで実行される
+- エンティティが削除された場合はフォールバックで直接実行
+- Folia が推奨するエンティティ操作パターン
+
+### 6.7 World 操作のスレッドセーフ化
+
+**変換前**:
+```java
+world.spawn(location, Zombie.class);
+world.dropItem(location, itemStack);
+world.createExplosion(location, 4.0f);
+```
+
+**変換後**:
+```java
+FoliaPatcher.safeSpawn(location, Zombie.class);
+FoliaPatcher.safeDropItem(location, itemStack);
+FoliaPatcher.safeCreateExplosion(location, 4.0f);
+```
+
+内部で `RegionScheduler.run()` を使用し、Location を所有するリージョンにルーティングする。
+戻り値が必要な操作は `CompletableFuture` で同期待ちする。
+
+### 6.8 Player / Inventory 操作のスレッドセーフ化
+
+**変換前**:
+```java
+player.openInventory(chestInventory);
+player.closeInventory();
+player.kickPlayer("Goodbye!");
+```
+
+**変換後**:
+```java
+FoliaPatcher.safeOpenInventory(player, chestInventory);
+FoliaPatcher.safeCloseInventory(player);
+FoliaPatcher.safeKickPlayer(player, "Goodbye!");
+```
+
+Player は Entity のサブクラスであるため、内部で `Entity.getScheduler().execute()` を使用する。
 
 ---
 

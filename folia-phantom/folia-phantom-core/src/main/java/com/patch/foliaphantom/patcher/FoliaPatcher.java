@@ -1,18 +1,33 @@
 package com.patch.foliaphantom.patcher;
 
 import org.bukkit.Bukkit;
-import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
+import org.bukkit.entity.LightningStrike;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryView;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffect;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -388,6 +403,560 @@ public final class FoliaPatcher {
     }
 
     // ========================================================================
+    // Block 操作全般のスレッドセーフラッパー
+    // ========================================================================
+
+    /**
+     * スレッドセーフな {@code Block.breakNaturally()} 操作。
+     */
+    public static boolean safeBreakNaturally(Block block) {
+        if (isOwningRegion(block.getLocation())) {
+            return block.breakNaturally();
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return block.breakNaturally();
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, block.getLocation(),
+                task -> future.complete(block.breakNaturally()));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute breakNaturally on correct region", e);
+            return block.breakNaturally();
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code Block.breakNaturally(ItemStack)} 操作。
+     */
+    public static boolean safeBreakNaturally(Block block, ItemStack tool) {
+        if (isOwningRegion(block.getLocation())) {
+            return block.breakNaturally(tool);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return block.breakNaturally(tool);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, block.getLocation(),
+                task -> future.complete(block.breakNaturally(tool)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute breakNaturally on correct region", e);
+            return block.breakNaturally(tool);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code Block.applyBoneMeal(BlockFace)} 操作。
+     */
+    public static boolean safeApplyBoneMeal(Block block, BlockFace face) {
+        if (isOwningRegion(block.getLocation())) {
+            return block.applyBoneMeal(face);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return block.applyBoneMeal(face);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, block.getLocation(),
+                task -> future.complete(block.applyBoneMeal(face)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute applyBoneMeal on correct region", e);
+            return block.applyBoneMeal(face);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code Block.setBlockData(BlockData)} 操作。
+     */
+    public static void safeSetBlockData(Block block, BlockData data) {
+        if (isOwningRegion(block.getLocation())) {
+            block.setBlockData(data);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            block.setBlockData(data);
+            return;
+        }
+        Bukkit.getRegionScheduler().run(targetPlugin, block.getLocation(),
+                task -> block.setBlockData(data));
+    }
+
+    /**
+     * スレッドセーフな {@code Block.setBlockData(BlockData, boolean)} 操作。
+     */
+    public static void safeSetBlockData(Block block, BlockData data, boolean applyPhysics) {
+        if (isOwningRegion(block.getLocation())) {
+            block.setBlockData(data, applyPhysics);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            block.setBlockData(data, applyPhysics);
+            return;
+        }
+        Bukkit.getRegionScheduler().run(targetPlugin, block.getLocation(),
+                task -> block.setBlockData(data, applyPhysics));
+    }
+
+    /**
+     * スレッドセーフな {@code Block.getState()} 操作（読み取り専用スナップショット）。
+     */
+    public static org.bukkit.block.BlockState safeGetState(Block block) {
+        return block.getState();
+    }
+
+    /**
+     * スレッドセーフな {@code Block.getBlockData()} 操作。
+     */
+    public static BlockData safeGetBlockData(Block block) {
+        return block.getBlockData();
+    }
+
+    /**
+     * スレッドセーフな {@code Block.getDrops()} 操作。
+     */
+    public static Collection<ItemStack> safeGetDrops(Block block) {
+        return block.getDrops();
+    }
+
+    /**
+     * スレッドセーフな {@code Block.getDrops(ItemStack)} 操作。
+     */
+    public static Collection<ItemStack> safeGetDrops(Block block, ItemStack tool) {
+        return block.getDrops(tool);
+    }
+
+    // ========================================================================
+    // Entity 操作のスレッドセーフラッパー
+    // ========================================================================
+
+    /**
+     * スレッドセーフな {@code Entity.teleport(Location)} 操作。
+     */
+    public static boolean safeTeleport(Entity entity, Location location) {
+        if (isOwningRegion(entity.getLocation())) {
+            return entity.teleport(location);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return entity.teleport(location);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        entity.getScheduler().execute(targetPlugin,
+                () -> future.complete(entity.teleport(location)),
+                () -> future.complete(entity.teleport(location)), 1L);
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute teleport on correct region", e);
+            return entity.teleport(location);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code Entity.teleport(Location, TeleportCause)} 操作。
+     */
+    public static boolean safeTeleport(Entity entity, Location location,
+                                       PlayerTeleportEvent.TeleportCause cause) {
+        if (isOwningRegion(entity.getLocation())) {
+            return entity.teleport(location, cause);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return entity.teleport(location, cause);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        entity.getScheduler().execute(targetPlugin,
+                () -> future.complete(entity.teleport(location, cause)),
+                () -> future.complete(entity.teleport(location, cause)), 1L);
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute teleport on correct region", e);
+            return entity.teleport(location, cause);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code Entity.remove()} 操作。
+     */
+    public static void safeRemove(Entity entity) {
+        if (isOwningRegion(entity.getLocation())) {
+            entity.remove();
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            entity.remove();
+            return;
+        }
+        entity.getScheduler().execute(targetPlugin, entity::remove, entity::remove, 1L);
+    }
+
+    /**
+     * スレッドセーフな {@code LivingEntity.damage(double)} 操作。
+     */
+    public static void safeDamage(LivingEntity entity, double amount) {
+        if (isOwningRegion(entity.getLocation())) {
+            entity.damage(amount);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            entity.damage(amount);
+            return;
+        }
+        entity.getScheduler().execute(targetPlugin,
+                () -> entity.damage(amount),
+                () -> entity.damage(amount), 1L);
+    }
+
+    /**
+     * スレッドセーフな {@code LivingEntity.damage(double, Entity)} 操作。
+     */
+    public static void safeDamage(LivingEntity entity, double amount, Entity damager) {
+        if (isOwningRegion(entity.getLocation())) {
+            entity.damage(amount, damager);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            entity.damage(amount, damager);
+            return;
+        }
+        entity.getScheduler().execute(targetPlugin,
+                () -> entity.damage(amount, damager),
+                () -> entity.damage(amount, damager), 1L);
+    }
+
+    /**
+     * スレッドセーフな {@code LivingEntity.setHealth(double)} 操作。
+     */
+    public static void safeSetHealth(LivingEntity entity, double health) {
+        if (isOwningRegion(entity.getLocation())) {
+            entity.setHealth(health);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            entity.setHealth(health);
+            return;
+        }
+        entity.getScheduler().execute(targetPlugin,
+                () -> entity.setHealth(health),
+                () -> entity.setHealth(health), 1L);
+    }
+
+    /**
+     * スレッドセーフな {@code LivingEntity.addPotionEffect(PotionEffect)} 操作。
+     */
+    public static boolean safeAddPotionEffect(LivingEntity entity, PotionEffect effect) {
+        if (isOwningRegion(entity.getLocation())) {
+            return entity.addPotionEffect(effect);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return entity.addPotionEffect(effect);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        entity.getScheduler().execute(targetPlugin,
+                () -> future.complete(entity.addPotionEffect(effect)),
+                () -> future.complete(entity.addPotionEffect(effect)), 1L);
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute addPotionEffect on correct region", e);
+            return entity.addPotionEffect(effect);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code LivingEntity.addPotionEffect(PotionEffect, boolean)} 操作。
+     */
+    public static boolean safeAddPotionEffect(LivingEntity entity, PotionEffect effect,
+                                              boolean force) {
+        if (isOwningRegion(entity.getLocation())) {
+            return entity.addPotionEffect(effect, force);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return entity.addPotionEffect(effect, force);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        entity.getScheduler().execute(targetPlugin,
+                () -> future.complete(entity.addPotionEffect(effect, force)),
+                () -> future.complete(entity.addPotionEffect(effect, force)), 1L);
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute addPotionEffect on correct region", e);
+            return entity.addPotionEffect(effect, force);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@link Entity#setFireTicks(int)} 操作。
+     */
+    public static void safeSetFireTicks(Entity entity, int ticks) {
+        if (isOwningRegion(entity.getLocation())) {
+            entity.setFireTicks(ticks);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            entity.setFireTicks(ticks);
+            return;
+        }
+        entity.getScheduler().execute(targetPlugin,
+                () -> entity.setFireTicks(ticks),
+                () -> entity.setFireTicks(ticks), 1L);
+    }
+
+    /**
+     * スレッドセーフな {@link Entity#setVelocity(org.bukkit.util.Vector)} 操作。
+     */
+    public static void safeSetVelocity(Entity entity, org.bukkit.util.Vector velocity) {
+        if (isOwningRegion(entity.getLocation())) {
+            entity.setVelocity(velocity);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            entity.setVelocity(velocity);
+            return;
+        }
+        entity.getScheduler().execute(targetPlugin,
+                () -> entity.setVelocity(velocity),
+                () -> entity.setVelocity(velocity), 1L);
+    }
+
+    // ========================================================================
+    // ワールド操作のスレッドセーフラッパー
+    // ========================================================================
+
+    /**
+     * スレッドセーフな {@code World.spawn(Location, Class)} 操作。
+     * グローバルリージョンスケジューラ上で実行される。
+     */
+    public static <T extends Entity> T safeSpawn(Location location, Class<T> clazz) {
+        if (isOwningRegion(location)) {
+            return location.getWorld().spawn(location, clazz);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return location.getWorld().spawn(location, clazz);
+        }
+        CompletableFuture<T> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, location,
+                task -> future.complete(location.getWorld().spawn(location, clazz)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute spawn on correct region", e);
+            return location.getWorld().spawn(location, clazz);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code World.dropItem(Location, ItemStack)} 操作。
+     */
+    public static Item safeDropItem(Location location, ItemStack item) {
+        if (isOwningRegion(location)) {
+            return location.getWorld().dropItem(location, item);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return location.getWorld().dropItem(location, item);
+        }
+        CompletableFuture<Item> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, location,
+                task -> future.complete(location.getWorld().dropItem(location, item)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute dropItem on correct region", e);
+            return location.getWorld().dropItem(location, item);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code World.dropItemNaturally(Location, ItemStack)} 操作。
+     */
+    public static Item safeDropItemNaturally(Location location, ItemStack item) {
+        if (isOwningRegion(location)) {
+            return location.getWorld().dropItemNaturally(location, item);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return location.getWorld().dropItemNaturally(location, item);
+        }
+        CompletableFuture<Item> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, location,
+                task -> future.complete(location.getWorld().dropItemNaturally(location, item)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute dropItemNaturally on correct region", e);
+            return location.getWorld().dropItemNaturally(location, item);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code World.createExplosion(Location, float)} 操作。
+     */
+    public static boolean safeCreateExplosion(Location location, float power) {
+        if (isOwningRegion(location)) {
+            return location.getWorld().createExplosion(location, power);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return location.getWorld().createExplosion(location, power);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, location,
+                task -> future.complete(location.getWorld().createExplosion(location, power)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute createExplosion on correct region", e);
+            return location.getWorld().createExplosion(location, power);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code World.createExplosion(Location, float, boolean)} 操作。
+     */
+    public static boolean safeCreateExplosion(Location location, float power, boolean setFire) {
+        if (isOwningRegion(location)) {
+            return location.getWorld().createExplosion(location, power, setFire);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return location.getWorld().createExplosion(location, power, setFire);
+        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, location,
+                task -> future.complete(
+                        location.getWorld().createExplosion(location, power, setFire)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute createExplosion on correct region", e);
+            return location.getWorld().createExplosion(location, power, setFire);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code World.strikeLightning(Location)} 操作。
+     */
+    public static LightningStrike safeStrikeLightning(Location location) {
+        if (isOwningRegion(location)) {
+            return location.getWorld().strikeLightning(location);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return location.getWorld().strikeLightning(location);
+        }
+        CompletableFuture<LightningStrike> future = new CompletableFuture<>();
+        Bukkit.getRegionScheduler().run(targetPlugin, location,
+                task -> future.complete(location.getWorld().strikeLightning(location)));
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute strikeLightning on correct region", e);
+            return location.getWorld().strikeLightning(location);
+        }
+    }
+
+    // ========================================================================
+    // Player / Inventory 操作のスレッドセーフラッパー
+    // ========================================================================
+
+    /**
+     * スレッドセーフな {@code Player.openInventory(Inventory)} 操作。
+     */
+    public static InventoryView safeOpenInventory(Player player, Inventory inventory) {
+        if (isOwningRegion(player.getLocation())) {
+            return player.openInventory(inventory);
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            return player.openInventory(inventory);
+        }
+        CompletableFuture<InventoryView> future = new CompletableFuture<>();
+        player.getScheduler().execute(targetPlugin,
+                () -> future.complete(player.openInventory(inventory)),
+                () -> future.complete(player.openInventory(inventory)), 1L);
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("Failed to execute openInventory on correct region", e);
+            return player.openInventory(inventory);
+        }
+    }
+
+    /**
+     * スレッドセーフな {@code Player.closeInventory()} 操作。
+     */
+    public static void safeCloseInventory(Player player) {
+        if (isOwningRegion(player.getLocation())) {
+            player.closeInventory();
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            player.closeInventory();
+            return;
+        }
+        player.getScheduler().execute(
+                targetPlugin, player::closeInventory, player::closeInventory, 1L);
+    }
+
+    /**
+     * スレッドセーフな {@code Player.kickPlayer(String)} 操作。
+     */
+    public static void safeKickPlayer(Player player, String message) {
+        if (isOwningRegion(player.getLocation())) {
+            player.kickPlayer(message);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            player.kickPlayer(message);
+            return;
+        }
+        player.getScheduler().execute(targetPlugin,
+                () -> player.kickPlayer(message),
+                () -> player.kickPlayer(message), 1L);
+    }
+
+    /**
+     * スレッドセーフな {@code Player.setGameMode(GameMode)} 操作。
+     */
+    public static void safeSetGameMode(Player player, GameMode gameMode) {
+        if (isOwningRegion(player.getLocation())) {
+            player.setGameMode(gameMode);
+            return;
+        }
+        Plugin targetPlugin = resolvePlugin();
+        if (targetPlugin == null) {
+            player.setGameMode(gameMode);
+            return;
+        }
+        player.getScheduler().execute(targetPlugin,
+                () -> player.setGameMode(gameMode),
+                () -> player.setGameMode(gameMode), 1L);
+    }
+
+    // ========================================================================
     // ワールド生成
     // ========================================================================
 
@@ -478,6 +1047,32 @@ public final class FoliaPatcher {
     // ========================================================================
     // 内部ヘルパー
     // ========================================================================
+
+    /**
+     * プラグインインスタンスを解決する。
+     * null の場合は警告を出力する。
+     */
+    private static Plugin resolvePlugin() {
+        if (plugin != null) {
+            return plugin;
+        }
+        log.warn("FoliaPatcher.plugin is null; executing operation directly");
+        return null;
+    }
+
+    /**
+     * 指定された Location が現在のスレッドの所有するリージョンか判定する。
+     */
+    private static boolean isOwningRegion(Location location) {
+        if (location == null || location.getWorld() == null) {
+            return false;
+        }
+        try {
+            return Bukkit.getServer().isOwnedByCurrentRegion(location);
+        } catch (NoSuchMethodError | Exception e) {
+            return Bukkit.isPrimaryThread();
+        }
+    }
 
     /**
      * フォールバック Location を取得する。

@@ -7,24 +7,26 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import java.util.List;
+import java.util.Set;
 
 /**
- * {@code Block.setType} 呼び出しをスレッドセーフなラッパーに置き換えるトランスフォーマー。
+ * {@code Block} の書き込み操作呼び出しをスレッドセーフなラッパーに置き換えるトランスフォーマー。
  *
  * <p>Folia はリージョン単位のマルチスレッドモデルを採用しており、
- * ワールドスレッド以外からの {@code Block.setType} 呼び出しは
+ * ワールドスレッド以外からのブロック操作呼び出しは
  * スレッドセーフではない。本トランスフォーマーはこれらの呼び出しを
- * {@code FoliaPatcher.safeSetType} / {@code FoliaPatcher.safeSetTypeWithPhysics}
- * に置き換える。</p>
+ * {@code FoliaPatcher} のラッパーに置き換える。</p>
  *
- * <p>変換例:
- * <pre>
- *   block.setType(Material.STONE);
- *     → FoliaPatcher.safeSetType(block, Material.STONE);
- *
- *   block.setType(Material.STONE, false);
- *     → FoliaPatcher.safeSetTypeWithPhysics(block, Material.STONE, false);
- * </pre>
+ * <p>変換対象:
+ * <ul>
+ *   <li>{@code Block.setType(Material)} → {@code FoliaPatcher.safeSetType(block, material)}</li>
+ *   <li>{@code Block.setType(Material, boolean)} → {@code FoliaPatcher.safeSetTypeWithPhysics(block, material, applyPhysics)}</li>
+ *   <li>{@code Block.setBlockData(BlockData)} → {@code FoliaPatcher.safeSetBlockData(block, data)}</li>
+ *   <li>{@code Block.setBlockData(BlockData, boolean)} → {@code FoliaPatcher.safeSetBlockData(block, data, applyPhysics)}</li>
+ *   <li>{@code Block.breakNaturally()} → {@code FoliaPatcher.safeBreakNaturally(block)}</li>
+ *   <li>{@code Block.breakNaturally(ItemStack)} → {@code FoliaPatcher.safeBreakNaturally(block, tool)}</li>
+ *   <li>{@code Block.applyBoneMeal(BlockFace)} → {@code FoliaPatcher.safeApplyBoneMeal(block, face)}</li>
+ * </ul>
  * </p>
  */
 public final class ThreadSafetyTransformer implements ClassTransformer, Opcodes {
@@ -32,35 +34,47 @@ public final class ThreadSafetyTransformer implements ClassTransformer, Opcodes 
     /** 変換対象の Block クラス内部名 */
     private static final String BLOCK_OWNER = "org/bukkit/block/Block";
 
-    /** setType メソッド名 */
-    private static final String SET_TYPE = "setType";
-
     /** FoliaPatcher の内部名 */
     private static final String PATCHER_OWNER = "com/patch/foliaphantom/patcher/FoliaPatcher";
 
-    /** safeSetType メソッド名（Material のみ） */
-    private static final String SAFE_SET_TYPE = "safeSetType";
+    /** 変換対象メソッド名と対応する FoliaPatcher メソッドのマッピング */
+    private static final MethodMapping[] METHOD_MAPPINGS = {
+        // setType は引数数で分岐するため特別処理
+        new MethodMapping("setType", null, false),
+        // setBlockData も引数数で分岐
+        new MethodMapping("setBlockData", null, false),
+        // breakNaturally: 引数なし版と ItemStack版
+        new MethodMapping("breakNaturally", "safeBreakNaturally", false),
+        // applyBoneMeal: BlockFace 引数
+        new MethodMapping("applyBoneMeal", "safeApplyBoneMeal", false),
+    };
 
-    /** safeSetTypeWithPhysics メソッド名（Material + boolean） */
-    private static final String SAFE_SET_TYPE_WITH_PHYSICS = "safeSetTypeWithPhysics";
-
-    /**
-     * {@code (Lorg/bukkit/block/Block;Lorg/bukkit/Material;)V}
-     * safeSetType のメソッド記述子
-     */
-    private static final String SAFE_SET_TYPE_DESC =
+    /** setType の記述子 */
+    private static final String SET_TYPE_1_DESC =
             "(Lorg/bukkit/block/Block;Lorg/bukkit/Material;)V";
-
-    /**
-     * {@code (Lorg/bukkit/block/Block;Lorg/bukkit/Material;Z)V}
-     * safeSetTypeWithPhysics のメソッド記述子
-     */
-    private static final String SAFE_SET_TYPE_WITH_PHYSICS_DESC =
+    private static final String SET_TYPE_2_DESC =
             "(Lorg/bukkit/block/Block;Lorg/bukkit/Material;Z)V";
+
+    /** setBlockData の記述子 */
+    private static final String SET_BLOCK_DATA_1_DESC =
+            "(Lorg/bukkit/block/Block;Lorg/bukkit/block/data/BlockData;)V";
+    private static final String SET_BLOCK_DATA_2_DESC =
+            "(Lorg/bukkit/block/Block;Lorg/bukkit/block/data/BlockData;Z)V";
+
+    /** breakNaturally の記述子（引数なし） */
+    private static final String BREAK_NATURALLY_0_DESC =
+            "(Lorg/bukkit/block/Block;)Z";
+    /** breakNaturally の記述子（ItemStack版） */
+    private static final String BREAK_NATURALLY_1_DESC =
+            "(Lorg/bukkit/block/Block;Lorg/bukkit/inventory/ItemStack;)Z";
+
+    /** applyBoneMeal の記述子 */
+    private static final String APPLY_BONE_MEAL_DESC =
+            "(Lorg/bukkit/block/Block;Lorg/bukkit/block/BlockFace;)Z";
 
     /**
      * クラスノード内の全メソッドを走査し、
-     * {@code Block.setType} 呼び出しを FoliaPatcher のラッパーに置き換える。
+     * Block の書き込み操作呼び出しを FoliaPatcher のラッパーに置き換える。
      *
      * @param classNode  変換対象のクラスノード
      * @param className  クラス内部名（未使用だがインターフェース規定で保持）
@@ -82,7 +96,7 @@ public final class ThreadSafetyTransformer implements ClassTransformer, Opcodes 
     }
 
     /**
-     * 単一メソッド内の Block.setType 呼び出しを置き換える。
+     * 単一メソッド内の Block 呼び出しを置き換える。
      *
      * @param method 変換対象のメソッドノード
      */
@@ -90,42 +104,80 @@ public final class ThreadSafetyTransformer implements ClassTransformer, Opcodes 
         AbstractInsnNode[] insns = method.instructions.toArray();
         for (int i = 0; i < insns.length; i++) {
             if (insns[i] instanceof MethodInsnNode methodInsn) {
-                replaceIfBlockSetType(method, methodInsn, i);
+                replaceIfBlockCall(methodInsn);
             }
         }
     }
 
     /**
-     * {@code Block.setType} の呼び出しであれば、
-     * 引数の数に応じて適切な safeSetType に置き換える。
-     *
-     * @param method    対象メソッドノード
-     * @param methodInsn 現在のメソッド呼び出しノード
-     * @param index     命令配列内のインデックス（未使用）
+     * Block の呼び出しであれば適切なラッパーに置き換える。
      */
-    private void replaceIfBlockSetType(
-            MethodNode method,
-            MethodInsnNode methodInsn,
-            @SuppressWarnings("unused") int index) {
+    private void replaceIfBlockCall(MethodInsnNode methodInsn) {
         if (!BLOCK_OWNER.equals(methodInsn.owner)) {
             return;
         }
-        if (!SET_TYPE.equals(methodInsn.name)) {
-            return;
-        }
-        // 引数が1つ: setType(Material)
-        // 引数が2つ: setType(Material, boolean)
+        String name = methodInsn.name;
         int argCount = getArgumentCount(methodInsn.desc);
-        if (argCount == 1) {
+
+        // setType(Material)
+        if ("setType".equals(name) && argCount == 1) {
             methodInsn.owner = PATCHER_OWNER;
-            methodInsn.name = SAFE_SET_TYPE;
-            methodInsn.desc = SAFE_SET_TYPE_DESC;
+            methodInsn.name = "safeSetType";
+            methodInsn.desc = SET_TYPE_1_DESC;
             methodInsn.setOpcode(INVOKESTATIC);
             methodInsn.itf = false;
-        } else if (argCount == 2) {
+            return;
+        }
+        // setType(Material, boolean)
+        if ("setType".equals(name) && argCount == 2) {
             methodInsn.owner = PATCHER_OWNER;
-            methodInsn.name = SAFE_SET_TYPE_WITH_PHYSICS;
-            methodInsn.desc = SAFE_SET_TYPE_WITH_PHYSICS_DESC;
+            methodInsn.name = "safeSetTypeWithPhysics";
+            methodInsn.desc = SET_TYPE_2_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // setBlockData(BlockData)
+        if ("setBlockData".equals(name) && argCount == 1) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeSetBlockData";
+            methodInsn.desc = SET_BLOCK_DATA_1_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // setBlockData(BlockData, boolean)
+        if ("setBlockData".equals(name) && argCount == 2) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeSetBlockData";
+            methodInsn.desc = SET_BLOCK_DATA_2_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // breakNaturally()
+        if ("breakNaturally".equals(name) && argCount == 0) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeBreakNaturally";
+            methodInsn.desc = BREAK_NATURALLY_0_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // breakNaturally(ItemStack)
+        if ("breakNaturally".equals(name) && argCount == 1) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeBreakNaturally";
+            methodInsn.desc = BREAK_NATURALLY_1_DESC;
+            methodInsn.setOpcode(INVOKESTATIC);
+            methodInsn.itf = false;
+            return;
+        }
+        // applyBoneMeal(BlockFace)
+        if ("applyBoneMeal".equals(name)) {
+            methodInsn.owner = PATCHER_OWNER;
+            methodInsn.name = "safeApplyBoneMeal";
+            methodInsn.desc = APPLY_BONE_MEAL_DESC;
             methodInsn.setOpcode(INVOKESTATIC);
             methodInsn.itf = false;
         }
@@ -133,13 +185,10 @@ public final class ThreadSafetyTransformer implements ClassTransformer, Opcodes 
 
     /**
      * メソッド記述子から引数の数を取得する。
-     *
-     * @param desc メソッド記述子（例: "(Lorg/bukkit/Material;)V"）
-     * @return 引数の数
      */
     private static int getArgumentCount(String desc) {
         int count = 0;
-        int i = 1; // '(' の次から開始
+        int i = 1;
         while (desc.charAt(i) != ')') {
             count++;
             char c = desc.charAt(i);
@@ -147,7 +196,6 @@ public final class ThreadSafetyTransformer implements ClassTransformer, Opcodes 
                 i = desc.indexOf(';', i) + 1;
             } else if (c == '[') {
                 i++;
-                // 配列の次が 'L' ならクラス名の終わりまでスキップ
                 while (desc.charAt(i) == '[') {
                     i++;
                 }
@@ -162,4 +210,8 @@ public final class ThreadSafetyTransformer implements ClassTransformer, Opcodes 
         }
         return count;
     }
+
+    /** メソッドマッピングを保持する内部レコード */
+    private record MethodMapping(String originalName, String patcherName,
+                                 boolean isOverloaded) {}
 }
