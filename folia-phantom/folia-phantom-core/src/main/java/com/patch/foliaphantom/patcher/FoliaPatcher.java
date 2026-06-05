@@ -23,10 +23,14 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.scheduler.BukkitWorker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -35,6 +39,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * Folia 互換のランタイムブリッジ。
@@ -110,6 +115,13 @@ public final class FoliaPatcher {
                 Bukkit.getGlobalRegionScheduler().run(plugin, scheduledTask -> task.run()));
     }
 
+    public static BukkitTask runTask(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Consumer<? super BukkitTask> task) {
+        return runTask(scheduler, plugin, () -> task.accept(currentTaskPlaceholder(plugin)));
+    }
+
     /**
      * 遅延付きの同期タスクを実行する。
      *
@@ -135,6 +147,14 @@ public final class FoliaPatcher {
                 plugin,
                 Bukkit.getGlobalRegionScheduler().runDelayed(
                         plugin, scheduledTask -> task.run(), delay));
+    }
+
+    public static BukkitTask runTaskLater(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Consumer<? super BukkitTask> task,
+            long delay) {
+        return runTaskLater(scheduler, plugin, () -> task.accept(currentTaskPlaceholder(plugin)), delay);
     }
 
     /**
@@ -166,6 +186,16 @@ public final class FoliaPatcher {
                         plugin, scheduledTask -> task.run(), delay, period));
     }
 
+    public static BukkitTask runTaskTimer(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Consumer<? super BukkitTask> task,
+            long delay,
+            long period) {
+        return runTaskTimer(
+                scheduler, plugin, () -> task.accept(currentTaskPlaceholder(plugin)), delay, period);
+    }
+
     /**
      * 非同期タスクを実行する。
      *
@@ -181,6 +211,14 @@ public final class FoliaPatcher {
         return wrapTask(
                 plugin,
                 Bukkit.getAsyncScheduler().runNow(plugin, scheduledTask -> task.run()));
+    }
+
+    public static BukkitTask runTaskAsynchronously(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Consumer<? super BukkitTask> task) {
+        return runTaskAsynchronously(
+                scheduler, plugin, () -> task.accept(currentTaskPlaceholder(plugin)));
     }
 
     /**
@@ -201,6 +239,15 @@ public final class FoliaPatcher {
                 plugin,
                 Bukkit.getAsyncScheduler().runDelayed(
                         plugin, scheduledTask -> task.run(), delay * 50L, TimeUnit.MILLISECONDS));
+    }
+
+    public static BukkitTask runTaskLaterAsynchronously(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Consumer<? super BukkitTask> task,
+            long delay) {
+        return runTaskLaterAsynchronously(
+                scheduler, plugin, () -> task.accept(currentTaskPlaceholder(plugin)), delay);
     }
 
     /**
@@ -226,6 +273,16 @@ public final class FoliaPatcher {
                         delay * 50L, period * 50L, TimeUnit.MILLISECONDS));
     }
 
+    public static BukkitTask runTaskTimerAsynchronously(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Consumer<? super BukkitTask> task,
+            long delay,
+            long period) {
+        return runTaskTimerAsynchronously(
+                scheduler, plugin, () -> task.accept(currentTaskPlaceholder(plugin)), delay, period);
+    }
+
     // ========================================================================
     // レガシースケジューラ互換
     // ========================================================================
@@ -247,6 +304,13 @@ public final class FoliaPatcher {
         return runTaskLater(scheduler, plugin, task, delay).getTaskId();
     }
 
+    public static int scheduleSyncDelayedTask(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Runnable task) {
+        return runTask(scheduler, plugin, task).getTaskId();
+    }
+
     /**
      * レガシー {@code scheduleAsyncDelayedTask} の互換実装。
      *
@@ -262,6 +326,46 @@ public final class FoliaPatcher {
             Runnable task,
             long delay) {
         return runTaskLaterAsynchronously(scheduler, plugin, task, delay).getTaskId();
+    }
+
+    public static int scheduleAsyncDelayedTask(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Runnable task) {
+        return runTaskAsynchronously(scheduler, plugin, task).getTaskId();
+    }
+
+    public static int scheduleSyncRepeatingTask(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Runnable task,
+            long delay,
+            long period) {
+        return runTaskTimer(scheduler, plugin, task, delay, period).getTaskId();
+    }
+
+    public static int scheduleAsyncRepeatingTask(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Runnable task,
+            long delay,
+            long period) {
+        return runTaskTimerAsynchronously(scheduler, plugin, task, delay, period).getTaskId();
+    }
+
+    public static <T> Future<T> callSyncMethod(
+            BukkitScheduler scheduler,
+            Plugin plugin,
+            Callable<T> task) {
+        CompletableFuture<T> future = new CompletableFuture<>();
+        runTask(scheduler, plugin, () -> {
+            try {
+                future.complete(task.call());
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            }
+        });
+        return future;
     }
 
     // ========================================================================
@@ -1029,10 +1133,36 @@ public final class FoliaPatcher {
     public static void cancelTasks(
             @SuppressWarnings("unused") BukkitScheduler ignored, Plugin target) {
         runningTasks.forEach((id, task) -> {
-            task.cancel();
-            runningTasks.remove(id);
+            if (target.equals(task.getOwningPlugin())) {
+                task.cancel();
+                runningTasks.remove(id);
+            }
         });
         log.info("Cancelled all tasks for plugin '{}'", target.getName());
+    }
+
+    public static boolean isCurrentlyRunning(
+            @SuppressWarnings("unused") BukkitScheduler ignored, int taskId) {
+        ScheduledTask task = runningTasks.get(taskId);
+        return task != null && !task.isCancelled();
+    }
+
+    public static boolean isQueued(
+            @SuppressWarnings("unused") BukkitScheduler ignored, int taskId) {
+        ScheduledTask task = runningTasks.get(taskId);
+        return task != null && !task.isCancelled();
+    }
+
+    public static List<BukkitTask> getPendingTasks(
+            @SuppressWarnings("unused") BukkitScheduler ignored) {
+        List<BukkitTask> tasks = new ArrayList<>();
+        runningTasks.forEach((id, task) -> tasks.add(new FoliaBukkitTask(id, plugin, task)));
+        return tasks;
+    }
+
+    public static List<BukkitWorker> getActiveWorkers(
+            @SuppressWarnings("unused") BukkitScheduler ignored) {
+        return List.of();
     }
 
     /**
@@ -1088,6 +1218,10 @@ public final class FoliaPatcher {
             return null;
         }
         return mainWorld.getSpawnLocation();
+    }
+
+    private static BukkitTask currentTaskPlaceholder(Plugin plugin) {
+        return new FoliaBukkitTask(-1, plugin, ScheduledTaskStub.INSTANCE);
     }
 
     /**
@@ -1167,6 +1301,30 @@ public final class FoliaPatcher {
             this.cancelled = true;
             runningTasks.remove(this.taskId);
             this.scheduledTask.cancel();
+        }
+    }
+
+    private enum ScheduledTaskStub implements ScheduledTask {
+        INSTANCE;
+
+        @Override
+        public Plugin getOwningPlugin() {
+            return plugin;
+        }
+
+        @Override
+        public boolean isRepeatingTask() {
+            return false;
+        }
+
+        @Override
+        public CancelledState cancel() {
+            return CancelledState.CANCELLED_BY_CALLER;
+        }
+
+        @Override
+        public ExecutionState getExecutionState() {
+            return ExecutionState.FINISHED;
         }
     }
 
