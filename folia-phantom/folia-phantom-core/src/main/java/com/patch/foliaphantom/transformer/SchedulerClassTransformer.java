@@ -46,7 +46,16 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         "runTaskLaterAsynchronously",
         "runTaskTimerAsynchronously",
         "scheduleSyncDelayedTask",
-        "scheduleAsyncDelayedTask"
+        "scheduleAsyncDelayedTask",
+        "scheduleSyncRepeatingTask",
+        "scheduleAsyncRepeatingTask",
+        "cancelTask",
+        "cancelTasks",
+        "isCurrentlyRunning",
+        "isQueued",
+        "getPendingTasks",
+        "getActiveWorkers",
+        "callSyncMethod"
     };
 
     /** BukkitRunnable インスタンスメソッド名一覧 */
@@ -107,27 +116,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
             return;
         }
         if (!isSchedulerMethod(methodInsn.name)) {
-            return;
-        }
-        // scheduleSyncDelayedTask と scheduleAsyncDelayedTask は特別処理
-        String newName = methodInsn.name;
-        if ("scheduleSyncDelayedTask".equals(newName)) {
-            // レガシー: runTaskLater にマッピング、taskId を返す
-            methodInsn.owner = PATCHER_OWNER;
-            methodInsn.name = "scheduleSyncDelayedTask";
-            methodInsn.desc = "(Lorg/bukkit/scheduler/BukkitScheduler;"
-                    + "Lorg/bukkit/plugin/Plugin;Ljava/lang/Runnable;J)I";
-            methodInsn.setOpcode(INVOKESTATIC);
-            methodInsn.itf = false;
-            return;
-        }
-        if ("scheduleAsyncDelayedTask".equals(newName)) {
-            methodInsn.owner = PATCHER_OWNER;
-            methodInsn.name = "scheduleAsyncDelayedTask";
-            methodInsn.desc = "(Lorg/bukkit/scheduler/BukkitScheduler;"
-                    + "Lorg/bukkit/plugin/Plugin;Ljava/lang/Runnable;J)I";
-            methodInsn.setOpcode(INVOKESTATIC);
-            methodInsn.itf = false;
             return;
         }
         // 通常のスケジューラメソッド: 第1引数に BukkitScheduler インスタンスを追加
