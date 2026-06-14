@@ -354,8 +354,9 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("breakNaturally region dispatch failed", e);
-            return block.breakNaturally();
+            // タイムアウト時にフォールバック実行するとスケジュール済みタスクと二重実行になるため行わない
+            log.warn("breakNaturally timed out; scheduled task will still execute on correct region", e);
+            return false;
         }
     }
 
@@ -373,8 +374,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("breakNaturally region dispatch failed", e);
-            return block.breakNaturally(tool);
+            log.warn("breakNaturally timed out; scheduled task will still execute on correct region", e);
+            return false;
         }
     }
 
@@ -392,8 +393,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("applyBoneMeal region dispatch failed", e);
-            return block.applyBoneMeal(face);
+            log.warn("applyBoneMeal timed out; scheduled task will still execute on correct region", e);
+            return false;
         }
     }
 
@@ -636,8 +637,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("spawn region dispatch failed", e);
-            return location.getWorld().spawn(location, clazz);
+            log.warn("spawn timed out; scheduled task will still execute on correct region", e);
+            return null;
         }
     }
 
@@ -655,8 +656,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("dropItem region dispatch failed", e);
-            return location.getWorld().dropItem(location, item);
+            log.warn("dropItem timed out; scheduled task will still execute on correct region", e);
+            return null;
         }
     }
 
@@ -674,8 +675,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("dropItemNaturally region dispatch failed", e);
-            return location.getWorld().dropItemNaturally(location, item);
+            log.warn("dropItemNaturally timed out; scheduled task will still execute on correct region", e);
+            return null;
         }
     }
 
@@ -693,8 +694,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("createExplosion region dispatch failed", e);
-            return location.getWorld().createExplosion(location, power);
+            log.warn("createExplosion timed out; scheduled task will still execute on correct region", e);
+            return false;
         }
     }
 
@@ -713,8 +714,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("createExplosion region dispatch failed", e);
-            return location.getWorld().createExplosion(location, power, setFire);
+            log.warn("createExplosion timed out; scheduled task will still execute on correct region", e);
+            return false;
         }
     }
 
@@ -732,8 +733,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("strikeLightning region dispatch failed", e);
-            return location.getWorld().strikeLightning(location);
+            log.warn("strikeLightning timed out; scheduled task will still execute on correct region", e);
+            return null;
         }
     }
 
@@ -758,8 +759,8 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("openInventory region dispatch failed", e);
-            return player.openInventory(inventory);
+            log.warn("openInventory timed out; scheduled task will still execute on correct region", e);
+            return null;
         }
     }
 
