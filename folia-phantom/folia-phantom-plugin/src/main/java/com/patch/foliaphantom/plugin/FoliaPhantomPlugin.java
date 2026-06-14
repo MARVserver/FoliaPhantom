@@ -97,6 +97,7 @@ public final class FoliaPhantomPlugin extends JavaPlugin {
         if (this.watcher != null) {
             this.watcher.shutdown();
         }
+        FoliaPatcher.shutdown();
         log.info("FoliaPhantom v{} disabled", getDescription().getVersion());
     }
 

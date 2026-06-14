@@ -169,7 +169,8 @@ public final class WorldGenClassTransformer implements ClassTransformer, Opcodes
         int argCount = getArgumentCount(methodInsn.desc);
 
         // World.spawn(Location, Class) → safeSpawn(Location, Class)
-        if ("spawn".equals(name) && argCount >= 2) {
+        // 引数3以上のオーバーロード（Consumer付きなど）はスタック不整合を避けるため対象外
+        if ("spawn".equals(name) && argCount == 2) {
             methodInsn.owner = PATCHER_OWNER;
             methodInsn.name = "safeSpawn";
             methodInsn.desc = SPAWN_DESC;
@@ -205,7 +206,8 @@ public final class WorldGenClassTransformer implements ClassTransformer, Opcodes
             return;
         }
         // World.createExplosion(Location, float, boolean) → safeCreateExplosion(Location, float, boolean)
-        if ("createExplosion".equals(name) && argCount >= 3) {
+        // 引数4以上のオーバーロードはスタック不整合を避けるため対象外
+        if ("createExplosion".equals(name) && argCount == 3) {
             methodInsn.owner = PATCHER_OWNER;
             methodInsn.name = "safeCreateExplosion";
             methodInsn.desc = EXPLOSION_2_DESC;

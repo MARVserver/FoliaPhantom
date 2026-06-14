@@ -1,6 +1,7 @@
 package com.patch.foliaphantom.plugin;
 
 import com.patch.foliaphantom.patcher.PluginPatcher;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Bukkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +58,9 @@ public final class PluginWatcher {
     /** 処理済みファイル数 */
     private final AtomicInteger processedFileCount;
 
-    /** スケジュールタスクの参照 */
+    /** Folia AsyncScheduler に登録したスケジュールタスク（shutdown 時にキャンセルする） */
+    private volatile ScheduledTask watcherTask;
+
     private volatile boolean running;
 
     /**
@@ -91,11 +94,11 @@ public final class PluginWatcher {
      */
     public void start() {
         this.running = true;
-        Bukkit.getAsyncScheduler().runAtFixedRate(
+        this.watcherTask = Bukkit.getAsyncScheduler().runAtFixedRate(
                 this.plugin,
-                scheduledTask -> scanAndPatchPlugins(),
+                scheduledTask -> { if (this.running) scanAndPatchPlugins(); },
                 0,
-                this.checkInterval * 50L,
+                (long) this.checkInterval * 1000L,
                 TimeUnit.MILLISECONDS);
         log.info("PluginWatcher started: interval={}s", this.checkInterval);
     }
@@ -105,6 +108,11 @@ public final class PluginWatcher {
      */
     public void shutdown() {
         this.running = false;
+        ScheduledTask task = this.watcherTask;
+        if (task != null) {
+            task.cancel();
+            this.watcherTask = null;
+        }
         log.info("PluginWatcher stopped. Total processed: {}",
                 this.processedFileCount.get());
     }
@@ -304,9 +312,9 @@ public final class PluginWatcher {
             java.util.jar.JarEntry entry;
             while ((entry = jis.getNextJarEntry()) != null) {
                 if (entry.getName().equals("plugin.yml")) {
-                    byte[] content = new byte[(int) entry.getSize()];
-                    jis.read(content);
-                    String yml = new String(content, "UTF-8");
+                    // entry.getSize() は -1 を返すことがあるため readAllBytes を使用
+                    byte[] content = jis.readAllBytes();
+                    String yml = new String(content, java.nio.charset.StandardCharsets.UTF_8);
                     return yml.contains("folia-supported: true");
                 }
             }
