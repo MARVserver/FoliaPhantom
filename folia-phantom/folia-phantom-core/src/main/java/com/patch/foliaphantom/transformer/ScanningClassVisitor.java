@@ -220,14 +220,17 @@ public final class ScanningClassVisitor extends ClassVisitor {
          * @return 対象の呼び出しであれば true
          */
         private boolean isTargetOwner(String owner, String name) {
-            // 完全一致の対象所有者（基本セット）
+            // BukkitScheduler / BukkitRunnable / WorldCreator / Plugin などの完全一致チェック
+            // （BukkitRunnable は TARGET_OWNERS に含まれているため別途検出不要）
             if (TARGET_OWNERS.contains(owner)) {
                 return true;
             }
-            // BukkitRunnable インスタンスメソッドの検出
-            if (BUKKIT_RUNNABLE_INSTANCE_METHODS.contains(name)
-                    && "java/lang/Runnable".equals(owner)) {
-                return false;
+            // BukkitRunnable サブクラス経由の呼び出しを検出する。
+            // サブクラスの型でコンパイルされたコードでは owner がサブクラス名になるため、
+            // クラス階層の解析なしに検出するためメソッド名のみでヒューリスティック判定する。
+            // SchedulerClassTransformer も同様に INVOKEVIRTUAL のメソッド名だけで置換するため整合する。
+            if (BUKKIT_RUNNABLE_INSTANCE_METHODS.contains(name)) {
+                return true;
             }
             // 拡張対象所有者の検出 + メソッド名の絞り込み
             if ("org/bukkit/entity/Entity".equals(owner)) {

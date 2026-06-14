@@ -130,6 +130,10 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
      * BukkitRunnable のインスタンスメソッド呼び出しを
      * FoliaPatcher の静的メソッドに置き換える。
      *
+     * <p>BukkitRunnable のサブクラス経由の呼び出しでは owner がサブクラス名になるため
+     * owner チェックは行わない。代わりに BukkitRunnable のメソッドシグネチャ先頭が
+     * {@code (Lorg/bukkit/plugin/Plugin;} であることを確認して偽陽性を排除する。</p>
+     *
      * @param methodInsn 検査対象のメソッド呼び出しノード
      */
     private void replaceBukkitRunnableCall(MethodInsnNode methodInsn) {
@@ -138,6 +142,11 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
             return;
         }
         if (!isRunnableInstanceMethod(methodInsn.name)) {
+            return;
+        }
+        // BukkitRunnable メソッドの第一引数は必ず Plugin。
+        // 別クラスに同名メソッドがある場合の偽陽性を排除する。
+        if (!methodInsn.desc.startsWith("(Lorg/bukkit/plugin/Plugin;")) {
             return;
         }
         // desc の先頭に Runnable 引数を追加: (Lplugin;...) → (Lrunnable;Lplugin;...)

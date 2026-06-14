@@ -116,7 +116,12 @@ public final class PluginPatcher {
      * @throws IOException JAR の読み書きに失敗した場合
      */
     public Path patchPlugin(Path jarPath) throws IOException {
-        log.info("Patching plugin: {}", jarPath.getFileName());
+        String fileName = jarPath.getFileName().toString();
+        if (fileName.startsWith("patched-")) {
+            log.warn("Skipping already-patched JAR: {}", fileName);
+            return jarPath;
+        }
+        log.info("Patching plugin: {}", fileName);
         if (this.verbose) {
             log.info("Input path: {}", jarPath.toAbsolutePath());
         }
@@ -250,15 +255,18 @@ public final class PluginPatcher {
      * @throws IOException 読み取りエラーが発生した場合
      */
     private byte[] modifyPluginYml(JarInputStream jis) throws IOException {
-        String content = new String(readAllBytes(jis), "UTF-8");
-        if (content.contains("folia-supported:")) {
-            log.warn("plugin.yml already contains folia-supported flag");
+        String content = new String(readAllBytes(jis), java.nio.charset.StandardCharsets.UTF_8);
+        if (content.contains("folia-supported: true")) {
+            log.debug("plugin.yml already declares folia-supported: true; keeping as-is");
+        } else if (content.contains("folia-supported:")) {
+            // folia-supported: false など別の値が設定されている場合は上書き
+            content = content.replaceAll("(?m)^folia-supported:.*$", "folia-supported: true");
+            log.debug("Replaced existing folia-supported flag with true");
         } else {
-            // 改行コードを検出して適切に追記
             String lineSeparator = content.contains("\r\n") ? "\r\n" : "\n";
             content = content.trim() + lineSeparator + "folia-supported: true" + lineSeparator;
         }
-        return content.getBytes("UTF-8");
+        return content.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**
@@ -279,7 +287,9 @@ public final class PluginPatcher {
         String[] runtimeClasses = {
             "com/patch/foliaphantom/patcher/FoliaPatcher.class",
             "com/patch/foliaphantom/patcher/FoliaPatcher$FoliaBukkitTask.class",
-            "com/patch/foliaphantom/patcher/FoliaPatcher$FoliaChunkGenerator.class"
+            "com/patch/foliaphantom/patcher/FoliaPatcher$FoliaChunkGenerator.class",
+            "com/patch/foliaphantom/patcher/FoliaPatcher$ScheduledTaskStub.class",
+            "com/patch/foliaphantom/patcher/FoliaPatcher$TaskSchedulerFactory.class"
         };
         for (String classPath : runtimeClasses) {
             InputStream classStream = getClass().getClassLoader()
