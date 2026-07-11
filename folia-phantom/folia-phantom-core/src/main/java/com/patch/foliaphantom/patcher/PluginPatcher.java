@@ -26,22 +26,25 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
+import java.util.zip.Deflater;
 
 /**
  * JAR 全体のパッチ処理を統括するオーケストレーター。
  *
- * <p>v2.1 では、入力の読み取りと出力順序を決定的に保ちながら、CPU 負荷の高い
- * ASM クラス変換だけを並列化する。非 class エントリはコピーし、署名ファイルは
- * 除去し、plugin.yml とランタイムブリッジを出力時に処理する。</p>
+ * <p>CPU 負荷の高い ASM クラス変換のみを並列化し、非 class エントリは
+ * 不要なタスク生成を行わず直接コピーする。JAR 出力は速度優先の圧縮を使用する。</p>
  */
 public final class PluginPatcher {
 
     private static final Logger log = LoggerFactory.getLogger(PluginPatcher.class);
     private static final int ASM_API = Opcodes.ASM9;
+    private static final byte[] BUKKIT_CONSTANT_POOL_MARKER =
+            "org/bukkit/".getBytes(StandardCharsets.US_ASCII);
     private static final String[] RUNTIME_CLASSES = {
         "com/patch/foliaphantom/patcher/FoliaPatcher.class",
         "com/patch/foliaphantom/patcher/FoliaPatcher$FoliaBukkitTask.class",
@@ -60,7 +63,8 @@ public final class PluginPatcher {
     public PluginPatcher(Path outputDir, boolean verbose) {
         this.outputDir = outputDir;
         this.verbose = verbose;
-        int parallelism = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+        int processors = Runtime.getRuntime().availableProcessors();
+        int parallelism = Math.max(1, processors > 2 ? processors - 1 : processors);
         this.forkJoinPool = new ForkJoinPool(parallelism);
         this.transformers = List.of(
                 new ThreadSafetyTransformer(),
@@ -77,20 +81,20 @@ public final class PluginPatcher {
             return jarPath;
         }
 
+        long startedAt = System.nanoTime();
         patchedClassCount.set(0);
         skippedClassCount.set(0);
         Files.createDirectories(outputDir);
         Path outputPath = outputDir.resolve("patched-" + fileName);
         log.info("Patching plugin: {} with {} worker(s)", fileName, forkJoinPool.getParallelism());
 
-        List<InputEntry> entries = readEntries(jarPath);
-        List<PreparedEntry> prepared = prepareEntries(entries);
+        List<PreparedEntry> prepared = readAndPrepareEntries(jarPath);
 
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(outputPath))) {
+            output.setLevel(Deflater.BEST_SPEED);
             Set<String> writtenNames = new HashSet<>();
             for (PreparedEntry entry : prepared) {
-                byte[] data = entry.contentTask().join();
-                addJarEntry(output, entry.name(), data);
+                addJarEntry(output, entry.name(), entry.content());
                 writtenNames.add(entry.name());
             }
             bundleRuntimeClasses(output, writtenNames);
@@ -103,13 +107,14 @@ public final class PluginPatcher {
             throw exception;
         }
 
-        log.info("Patch complete for: {} (patched: {}, skipped: {})",
-                fileName, patchedClassCount.get(), skippedClassCount.get());
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+        log.info("Patch complete for: {} (patched: {}, skipped: {}, elapsed: {} ms)",
+                fileName, patchedClassCount.get(), skippedClassCount.get(), elapsedMs);
         return outputPath;
     }
 
-    private List<InputEntry> readEntries(Path jarPath) throws IOException {
-        List<InputEntry> entries = new ArrayList<>();
+    private List<PreparedEntry> readAndPrepareEntries(Path jarPath) throws IOException {
+        List<PreparedEntry> entries = new ArrayList<>();
         try (JarInputStream input = new JarInputStream(Files.newInputStream(jarPath))) {
             JarEntry entry;
             while ((entry = input.getNextJarEntry()) != null) {
@@ -117,36 +122,28 @@ public final class PluginPatcher {
                 if (entry.isDirectory() || isSignatureFile(name)) {
                     continue;
                 }
-                entries.add(new InputEntry(name, input.readAllBytes()));
+
+                byte[] content = input.readAllBytes();
+                if ("plugin.yml".equals(name)) {
+                    entries.add(PreparedEntry.direct(name, modifyPluginYml(content)));
+                } else if (name.endsWith(".class")) {
+                    ForkJoinTask<byte[]> task = forkJoinPool.submit(
+                            () -> transformClass(name, content));
+                    entries.add(PreparedEntry.async(name, task));
+                } else {
+                    entries.add(PreparedEntry.direct(name, content));
+                }
             }
         }
         return entries;
-    }
-
-    private List<PreparedEntry> prepareEntries(List<InputEntry> entries) {
-        List<PreparedEntry> prepared = new ArrayList<>(entries.size());
-        for (InputEntry entry : entries) {
-            if ("plugin.yml".equals(entry.name())) {
-                byte[] modified = modifyPluginYml(entry.content());
-                prepared.add(new PreparedEntry(entry.name(),
-                        forkJoinPool.submit(() -> modified)));
-            } else if (entry.name().endsWith(".class")) {
-                ForkJoinTask<byte[]> task = forkJoinPool.submit(
-                        () -> transformClass(entry.name(), entry.content()));
-                prepared.add(new PreparedEntry(entry.name(), task));
-            } else {
-                prepared.add(new PreparedEntry(entry.name(),
-                        forkJoinPool.submit(entry::content)));
-            }
-        }
-        return prepared;
     }
 
     private byte[] transformClass(String entryName, byte[] classBytes) {
         String className = entryName.substring(0, entryName.length() - ".class".length())
                 .replace('/', '.');
 
-        if (!needsPatching(classBytes)) {
+        // Most library classes do not reference Bukkit at all. Avoid constructing ASM visitors for them.
+        if (!containsBytes(classBytes, BUKKIT_CONSTANT_POOL_MARKER) || !needsPatching(classBytes)) {
             skippedClassCount.incrementAndGet();
             if (verbose) {
                 log.debug("Skipping class (no patch needed): {}", className);
@@ -180,9 +177,22 @@ public final class PluginPatcher {
     private boolean needsPatching(byte[] classBytes) {
         ClassReader reader = new ClassReader(classBytes);
         ScanningClassVisitor scanner = new ScanningClassVisitor(ASM_API, null);
-        // Method instructions are the primary detection signal; SKIP_CODE would disable them.
         reader.accept(scanner, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         return scanner.needsPatching();
+    }
+
+    private static boolean containsBytes(byte[] haystack, byte[] needle) {
+        int limit = haystack.length - needle.length;
+        outer:
+        for (int i = 0; i <= limit; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (haystack[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     private byte[] modifyPluginYml(byte[] bytes) {
@@ -242,9 +252,21 @@ public final class PluginPatcher {
         return skippedClassCount.get();
     }
 
-    private record InputEntry(String name, byte[] content) {
-    }
+    private record PreparedEntry(
+            String name,
+            byte[] directContent,
+            ForkJoinTask<byte[]> contentTask) {
 
-    private record PreparedEntry(String name, ForkJoinTask<byte[]> contentTask) {
+        private static PreparedEntry direct(String name, byte[] content) {
+            return new PreparedEntry(name, content, null);
+        }
+
+        private static PreparedEntry async(String name, ForkJoinTask<byte[]> task) {
+            return new PreparedEntry(name, null, task);
+        }
+
+        private byte[] content() {
+            return contentTask == null ? directContent : contentTask.join();
+        }
     }
 }
