@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (Java ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['17', '21']
+
+    defaults:
+      run:
+        working-directory: folia-phantom
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+          cache-dependency-path: folia-phantom/pom.xml
+
+      - name: Verify reactor
+        run: mvn --batch-mode --no-transfer-progress --fail-at-end verify
+
+      - name: Upload packaged artifacts
+        if: matrix.java == '21'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pasta-java21-${{ github.sha }}
+          path: |
+            folia-phantom/**/target/*.jar
+            !folia-phantom/**/target/original-*.jar
+          if-no-files-found: error
+          retention-days: 14
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      security-events: write
+      packages: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          build-mode: manual
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: folia-phantom/pom.xml
+      - name: Build for CodeQL
+        working-directory: folia-phantom
+        run: mvn --batch-mode --no-transfer-progress -DskipTests package
+      - uses: github/codeql-action/analyze@v3
