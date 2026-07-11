@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'release/v*'
   workflow_dispatch:
 
 permissions:
@@ -25,43 +27,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-          cache-dependency-path: folia-phantom/**/pom.xml
-
-      - name: Verify and package
-        run: mvn --batch-mode --no-transfer-progress --fail-at-end clean verify
-
-      - name: Stage release artifacts
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          find . -path '*/target/*.jar' -type f ! -name 'original-*.jar' -print0 \
-            | xargs -0 -I{} cp '{}' release/
-          test -n "$(find release -maxdepth 1 -name '*.jar' -print -quit)"
-          cd release
-          sha256sum *.jar > SHA256SUMS
-
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pasta-${{ github.ref_name }}
-          path: folia-phantom/release/*
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: |
-            folia-phantom/release/*.jar
-            folia-phantom/release/SHA256SUMS
+          fetch
