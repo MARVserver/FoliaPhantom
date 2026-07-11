@@ -128,14 +128,15 @@ public final class PluginPatcher {
         for (InputEntry entry : entries) {
             if ("plugin.yml".equals(entry.name())) {
                 byte[] modified = modifyPluginYml(entry.content());
-                prepared.add(new PreparedEntry(entry.name(), ForkJoinTask.adapt(() -> modified)));
+                prepared.add(new PreparedEntry(entry.name(),
+                        forkJoinPool.submit(() -> modified)));
             } else if (entry.name().endsWith(".class")) {
                 ForkJoinTask<byte[]> task = forkJoinPool.submit(
                         () -> transformClass(entry.name(), entry.content()));
                 prepared.add(new PreparedEntry(entry.name(), task));
             } else {
                 prepared.add(new PreparedEntry(entry.name(),
-                        ForkJoinTask.adapt(entry::content)));
+                        forkJoinPool.submit(entry::content)));
             }
         }
         return prepared;
