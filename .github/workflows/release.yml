@@ -83,7 +83,7 @@ jobs:
           sha256sum *.jar > SHA256SUMS
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pasta-${{ steps.version.outputs.tag }}
           path: folia-phantom/release/*
