@@ -58,16 +58,29 @@ public final class PluginPatcher {
     private final ForkJoinPool forkJoinPool;
     private final Path outputDir;
     private final boolean verbose;
+    private final boolean parallel;
     private final AtomicInteger patchedClassCount = new AtomicInteger();
     private final AtomicInteger skippedClassCount = new AtomicInteger();
+    private final AtomicInteger failedClassCount = new AtomicInteger();
     private final ConcurrentLinkedQueue<String> patchedClassNames = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<TransformationFailure> transformationFailures =
+            new ConcurrentLinkedQueue<>();
 
     public PluginPatcher(Path outputDir, boolean verbose) {
+        this(outputDir, verbose, true);
+    }
+
+    /**
+     * @param parallel whether class transformations should use a ForkJoinPool. Browser runtimes can
+     *                 disable this to avoid worker/thread emulation overhead and improve stability.
+     */
+    public PluginPatcher(Path outputDir, boolean verbose, boolean parallel) {
         this.outputDir = outputDir;
         this.verbose = verbose;
+        this.parallel = parallel;
         int processors = Runtime.getRuntime().availableProcessors();
         int parallelism = Math.max(1, processors > 2 ? processors - 1 : processors);
-        this.forkJoinPool = new ForkJoinPool(parallelism);
+        this.forkJoinPool = parallel ? new ForkJoinPool(parallelism) : null;
         this.transformers = List.of(
                 new ThreadSafetyTransformer(),
                 new WorldGenClassTransformer(),
@@ -86,10 +99,13 @@ public final class PluginPatcher {
         long startedAt = System.nanoTime();
         patchedClassCount.set(0);
         skippedClassCount.set(0);
+        failedClassCount.set(0);
         patchedClassNames.clear();
+        transformationFailures.clear();
         Files.createDirectories(outputDir);
         Path outputPath = outputDir.resolve("patched-" + fileName);
-        log.info("Patching plugin: {} with {} worker(s)", fileName, forkJoinPool.getParallelism());
+        int workers = parallel ? forkJoinPool.getParallelism() : 1;
+        log.info("Patching plugin: {} with {} worker(s)", fileName, workers);
 
         List<PreparedEntry> prepared = readAndPrepareEntries(jarPath);
 
@@ -111,8 +127,8 @@ public final class PluginPatcher {
         }
 
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
-        log.info("Patch complete for: {} (patched: {}, skipped: {}, elapsed: {} ms)",
-                fileName, patchedClassCount.get(), skippedClassCount.get(), elapsedMs);
+        log.info("Patch complete for: {} (patched: {}, skipped: {}, unchanged after errors: {}, elapsed: {} ms)",
+                fileName, patchedClassCount.get(), skippedClassCount.get(), failedClassCount.get(), elapsedMs);
         return outputPath;
     }
 
@@ -130,9 +146,13 @@ public final class PluginPatcher {
                 if ("plugin.yml".equals(name)) {
                     entries.add(PreparedEntry.direct(name, modifyPluginYml(content)));
                 } else if (name.endsWith(".class")) {
-                    ForkJoinTask<byte[]> task = forkJoinPool.submit(
-                            () -> transformClass(name, content));
-                    entries.add(PreparedEntry.async(name, task));
+                    if (parallel) {
+                        ForkJoinTask<byte[]> task = forkJoinPool.submit(
+                                () -> transformClass(name, content));
+                        entries.add(PreparedEntry.async(name, task));
+                    } else {
+                        entries.add(PreparedEntry.direct(name, transformClass(name, content)));
+                    }
                 } else {
                     entries.add(PreparedEntry.direct(name, content));
                 }
@@ -145,37 +165,48 @@ public final class PluginPatcher {
         String className = entryName.substring(0, entryName.length() - ".class".length())
                 .replace('/', '.');
 
-        // Most library classes do not reference Bukkit at all. Avoid constructing ASM visitors for them.
-        if (!containsBytes(classBytes, BUKKIT_CONSTANT_POOL_MARKER) || !needsPatching(classBytes)) {
-            skippedClassCount.incrementAndGet();
-            if (verbose) {
-                log.debug("Skipping class (no patch needed): {}", className);
+        try {
+            // Most library classes do not reference Bukkit at all. Avoid constructing ASM visitors for them.
+            if (!containsBytes(classBytes, BUKKIT_CONSTANT_POOL_MARKER) || !needsPatching(classBytes)) {
+                skippedClassCount.incrementAndGet();
+                if (verbose) {
+                    log.debug("Skipping class (no patch needed): {}", className);
+                }
+                return classBytes;
             }
+
+            ClassReader reader = new ClassReader(classBytes);
+            ClassNode classNode = new ClassNode(ASM_API);
+            reader.accept(classNode, ClassReader.EXPAND_FRAMES);
+
+            byte[] result = classBytes;
+            for (ClassTransformer transformer : transformers) {
+                ClassWriter writer = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES);
+                byte[] transformed = transformer.transform(classNode, className, writer);
+                if (transformed != null) {
+                    result = transformed;
+                    reader = new ClassReader(result);
+                    classNode = new ClassNode(ASM_API);
+                    reader.accept(classNode, ClassReader.EXPAND_FRAMES);
+                }
+            }
+
+            patchedClassCount.incrementAndGet();
+            patchedClassNames.add(className);
+            if (verbose) {
+                log.debug("Patched class: {}", className);
+            }
+            return result;
+        } catch (RuntimeException | LinkageError exception) {
+            failedClassCount.incrementAndGet();
+            transformationFailures.add(new TransformationFailure(
+                    className,
+                    exception.getClass().getName(),
+                    exception.getMessage() == null ? "" : exception.getMessage()));
+            log.warn("Leaving class unmodified after transform failure: {} ({})",
+                    className, exception.toString());
             return classBytes;
         }
-
-        ClassReader reader = new ClassReader(classBytes);
-        ClassNode classNode = new ClassNode(ASM_API);
-        reader.accept(classNode, ClassReader.EXPAND_FRAMES);
-
-        byte[] result = classBytes;
-        for (ClassTransformer transformer : transformers) {
-            ClassWriter writer = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES);
-            byte[] transformed = transformer.transform(classNode, className, writer);
-            if (transformed != null) {
-                result = transformed;
-                reader = new ClassReader(result);
-                classNode = new ClassNode(ASM_API);
-                reader.accept(classNode, ClassReader.EXPAND_FRAMES);
-            }
-        }
-
-        patchedClassCount.incrementAndGet();
-        patchedClassNames.add(className);
-        if (verbose) {
-            log.debug("Patched class: {}", className);
-        }
-        return result;
     }
 
     private boolean needsPatching(byte[] classBytes) {
@@ -256,8 +287,18 @@ public final class PluginPatcher {
         return skippedClassCount.get();
     }
 
+    public int getFailedClassCount() {
+        return failedClassCount.get();
+    }
+
     public List<String> getPatchedClassNames() {
         return patchedClassNames.stream().sorted().toList();
+    }
+
+    public List<TransformationFailure> getTransformationFailures() {
+        return transformationFailures.stream()
+                .sorted(java.util.Comparator.comparing(TransformationFailure::className))
+                .toList();
     }
 
     /**
@@ -280,6 +321,9 @@ public final class PluginPatcher {
                 return "java/lang/Object";
             }
         }
+    }
+
+    public record TransformationFailure(String className, String exceptionType, String message) {
     }
 
     private record PreparedEntry(
