@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pasta</title>
+  <meta name="description" content="Patch Bukkit plugins for Folia in your browser.">
+  <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #111;
+      background: #fff;
+    }
+    main { width: min(100%, 520px); }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { margin: 0 0 24px; color: #666; }
+    input { width: 100%; margin-bottom: 12px; }
+    button {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #111;
+      border-radius: 6px;
+      background: #111;
+      color: #fff;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .45; cursor: default; }
+    #status { min-height: 24px; margin: 14px 0 0; color: #666; }
+    footer { margin-top: 28px; font-size: 12px; color: #888; }
+    a { color: inherit; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>pasta</h1>
+    <p>Bukkit plugin → Folia</p>
+
+    <input id="file" type="file" accept=".jar,application/java-archive">
+    <button id="patch" disabled>Patch &amp; Download</button>
+    <div id="status">Select a .jar file.</div>
+
+    <footer>
+      Runs locally in your browser with CheerpJ. Your plugin JAR is not uploaded to pasta.
+    </footer>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
