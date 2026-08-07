@@ -6,9 +6,16 @@ let patcherPromise;
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
-  const valid = Boolean(file && file.name.toLowerCase().endsWith(".jar"));
+  const isJar = Boolean(file && file.name.toLowerCase().endsWith(".jar"));
+  const alreadyPatched = Boolean(file && file.name.toLowerCase().startsWith("patched-"));
+  const valid = isJar && !alreadyPatched;
+
   patchButton.disabled = !valid;
-  status.textContent = valid ? file.name : "Select a .jar file.";
+  status.textContent = alreadyPatched
+    ? "Already patched."
+    : valid
+      ? file.name
+      : "Select a .jar file.";
 });
 
 patchButton.addEventListener("click", async () => {
