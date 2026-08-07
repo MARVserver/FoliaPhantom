@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>pasta</title>
   <meta name="description" content="Patch Bukkit plugins for Folia in your browser.">
+  <link rel="icon" href="data:,">
   <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -18,7 +19,7 @@
       color: #111;
       background: #fff;
     }
-    main { width: min(100%, 520px); }
+    main { width: min(100%, 720px); }
     h1 { margin: 0 0 8px; font-size: 28px; }
     p { margin: 0 0 24px; color: #666; }
     input { width: 100%; margin-bottom: 12px; }
@@ -34,6 +35,28 @@
     }
     button:disabled { opacity: .45; cursor: default; }
     #status { min-height: 24px; margin: 14px 0 0; color: #666; }
+    #report { margin-top: 24px; }
+    #report[hidden] { display: none; }
+    .summary { margin-bottom: 12px; color: #444; }
+    .result {
+      padding: 12px 0;
+      border-top: 1px solid #ddd;
+    }
+    .result:last-of-type { border-bottom: 1px solid #ddd; }
+    .result-head {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .result-name { overflow-wrap: anywhere; }
+    .result-meta { color: #666; white-space: nowrap; }
+    .result-error { margin-top: 6px; color: #900; overflow-wrap: anywhere; }
+    .links { display: flex; gap: 14px; margin-top: 8px; }
+    .links a, #report-download { color: inherit; }
+    details { margin-top: 8px; color: #555; }
+    pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+    #report-download { display: inline-block; margin-top: 14px; }
     footer { margin-top: 28px; font-size: 12px; color: #888; }
     a { color: inherit; }
   </style>
@@ -43,12 +66,18 @@
     <h1>pasta</h1>
     <p>Bukkit plugin → Folia</p>
 
-    <input id="file" type="file" accept=".jar,application/java-archive">
-    <button id="patch" disabled>Patch &amp; Download</button>
-    <div id="status">Select a .jar file.</div>
+    <input id="file" type="file" multiple accept=".jar,application/java-archive">
+    <button id="patch" disabled>Patch selected</button>
+    <div id="status">Select one or more .jar files.</div>
+
+    <section id="report" hidden aria-live="polite">
+      <div id="report-summary" class="summary"></div>
+      <div id="results"></div>
+      <a id="report-download" download="pasta-report.csv">Download report.csv</a>
+    </section>
 
     <footer>
-      Runs locally in your browser with CheerpJ. Your plugin JAR is not uploaded to pasta.
+      Runs locally in your browser with CheerpJ. Your plugin JARs are not uploaded to pasta.
     </footer>
   </main>
 
