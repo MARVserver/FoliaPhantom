@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.TimeUnit;
@@ -59,6 +60,7 @@ public final class PluginPatcher {
     private final boolean verbose;
     private final AtomicInteger patchedClassCount = new AtomicInteger();
     private final AtomicInteger skippedClassCount = new AtomicInteger();
+    private final ConcurrentLinkedQueue<String> patchedClassNames = new ConcurrentLinkedQueue<>();
 
     public PluginPatcher(Path outputDir, boolean verbose) {
         this.outputDir = outputDir;
@@ -84,6 +86,7 @@ public final class PluginPatcher {
         long startedAt = System.nanoTime();
         patchedClassCount.set(0);
         skippedClassCount.set(0);
+        patchedClassNames.clear();
         Files.createDirectories(outputDir);
         Path outputPath = outputDir.resolve("patched-" + fileName);
         log.info("Patching plugin: {} with {} worker(s)", fileName, forkJoinPool.getParallelism());
@@ -157,7 +160,7 @@ public final class PluginPatcher {
 
         byte[] result = classBytes;
         for (ClassTransformer transformer : transformers) {
-            ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+            ClassWriter writer = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES);
             byte[] transformed = transformer.transform(classNode, className, writer);
             if (transformed != null) {
                 result = transformed;
@@ -168,6 +171,7 @@ public final class PluginPatcher {
         }
 
         patchedClassCount.incrementAndGet();
+        patchedClassNames.add(className);
         if (verbose) {
             log.debug("Patched class: {}", className);
         }
@@ -250,6 +254,32 @@ public final class PluginPatcher {
 
     public int getSkippedClassCount() {
         return skippedClassCount.get();
+    }
+
+    public List<String> getPatchedClassNames() {
+        return patchedClassNames.stream().sorted().toList();
+    }
+
+    /**
+     * ASM normally loads referenced classes while computing stack map frames. Plugin dependencies
+     * such as Bukkit/Paper are intentionally absent from the CLI and browser runtime, so fall back
+     * to Object when an external type cannot be resolved. Resolvable JDK/application types still use
+     * ASM's normal hierarchy calculation.
+     */
+    private static final class SafeClassWriter extends ClassWriter {
+
+        private SafeClassWriter(int flags) {
+            super(flags);
+        }
+
+        @Override
+        protected String getCommonSuperClass(String type1, String type2) {
+            try {
+                return super.getCommonSuperClass(type1, type2);
+            } catch (TypeNotPresentException | LinkageError exception) {
+                return "java/lang/Object";
+            }
+        }
     }
 
     private record PreparedEntry(
