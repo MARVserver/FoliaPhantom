@@ -21,6 +21,7 @@
         <module>folia-phantom-cli</module>
         <module>folia-phantom-gui</module>
         <module>folia-phantom-plugin</module>
+        <module>folia-phantom-web</module>
     </modules>
 
     <properties>
