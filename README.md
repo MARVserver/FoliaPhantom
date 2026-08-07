@@ -141,4 +141,4 @@ JarOutputStream ──► Patched JAR
 
 ## License
 
-MARV License v1.0.0
+MIT License. See [LICENSE](LICENSE).

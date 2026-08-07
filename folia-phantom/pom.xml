@@ -16,6 +16,14 @@
     <name>pasta</name>
     <description>Folia Phantom — Bukkit to Folia bytecode transformer</description>
 
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/license/mit</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <modules>
         <module>folia-phantom-core</module>
         <module>folia-phantom-cli</module>
