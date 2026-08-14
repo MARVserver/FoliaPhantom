@@ -18,11 +18,12 @@ This file defines the default engineering rules for humans and coding agents wor
 
 ## Required toolchain
 
-- Java 17 is the compatibility floor. JDK 21 is recommended for local development.
+- JDK 21 is required for Maven builds. Paper API 1.21.x contains Java 21 class files and cannot be read by a JDK 17 compiler.
 - Maven 3.8+.
 - Build from `folia-phantom/` with `mvn clean verify`.
+- The Maven compiler currently emits pasta-owned classes with `--release 17`. Treat the build JDK and emitted bytecode target as separate compatibility decisions.
 
-Do not raise the Java bytecode target or Paper API version as part of an unrelated change.
+Do not raise the emitted Java bytecode target or Paper API version as part of an unrelated change. The browser/CheerpJ path must be reviewed before changing the bytecode target.
 
 ## Java conventions
 
@@ -89,7 +90,7 @@ Before changing code:
 
 Before opening a PR:
 
-1. Run `mvn clean verify` from `folia-phantom/`.
+1. Use JDK 21 and run `mvn clean verify` from `folia-phantom/`.
 2. For browser changes, exercise file selection, drag-and-drop, success, partial failure, and reset states in a modern browser.
 3. Confirm generated/release artifacts are not committed.
 4. Update README or user documentation when CLI/UI behavior changes.
