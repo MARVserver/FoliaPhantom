@@ -22,7 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: ['17', '21']
+        # Paper 1.21.x is built for Java 21. pasta still emits release-17
+        # project classes, but Maven must run on a JDK that can read Paper's
+        # Java 21 class files.
+        java: ['21']
 
     defaults:
       run:
@@ -62,7 +65,12 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - name: Review dependency changes
+        # The action hard-fails when GitHub's Dependency graph is disabled for
+        # the repository. Keep the signal visible without making every PR
+        # permanently red; remove this fallback once Dependency graph is on.
+        continue-on-error: true
+        uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
 
