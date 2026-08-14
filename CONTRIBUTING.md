@@ -4,14 +4,16 @@ Thanks for contributing to `pasta` / Folia Phantom. Changes should prioritize Fo
 
 ## Prerequisites
 
-- JDK 17 or newer; JDK 21 is recommended.
+- JDK 21 or newer for Maven builds. Paper API 1.21.x is distributed as Java 21 bytecode.
 - Maven 3.8+.
 - Git.
 - A modern browser for changes under `web/`.
 
+The project currently compiles pasta-owned classes with `--release 17`. This does not mean JDK 17 can build the reactor: the build JDK must also be able to read Paper's Java 21 dependencies.
+
 ## Build and verify
 
-From the repository root:
+From the repository root, with JDK 21 selected:
 
 ```bash
 cd folia-phantom
@@ -46,7 +48,8 @@ Suggested branch names:
 
 ### Java
 
-- Java 17-compatible language/API features only unless a coordinated compatibility change says otherwise.
+- Keep source compatible with the configured Maven `--release` target unless a coordinated compatibility change says otherwise.
+- Build and CI tooling must use JDK 21 while Paper 1.21.x is on the compile classpath.
 - 4 spaces, no tabs.
 - No wildcard imports.
 - Prefer explicit control flow over clever compact expressions in transformer code.
