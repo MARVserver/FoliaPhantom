@@ -40,9 +40,9 @@ Carbonara does not change the project's `2.0.0` version by itself; versioning re
 | Mode | Best for | Requires |
 |------|----------|----------|
 | **Browser** | Quick local patching without installing a desktop app | Modern browser |
-| **CLI** | Automation and batch patching | Java 17+ |
-| **GUI** | Desktop drag-and-drop workflows | Java 17+ |
-| **Server plugin** | Patching from a Bukkit/Paper server | Paper-compatible server |
+| **CLI** | Automation and batch patching | Java 21+ recommended/validated |
+| **GUI** | Desktop drag-and-drop workflows | Java 21+ recommended/validated |
+| **Server plugin** | Patching from a Bukkit/Paper server | Java 21+ Paper-compatible server |
 
 ### Browser
 
@@ -139,9 +139,12 @@ Transformer order is intentional because rewrites may depend on earlier normaliz
 
 ## Requirements
 
-- **Java 17+** compatibility target; JDK 21+ recommended for development.
+- **JDK 21+ for builds** — Paper API 1.21.1 is Java 21 bytecode, so Maven must run on JDK 21 or newer.
 - **Maven 3.8+** for building.
-- **Paper API 1.21.1** for the plugin module (`provided` scope).
+- **Paper API 1.21.1** for Paper/Folia integration.
+- pasta-owned Java classes are currently compiled with Maven `--release 17`; this bytecode target is separate from the JDK required to resolve Java 21 Paper dependencies.
+
+For packaged CLI/GUI/server workflows, Java 21 is the supported baseline used by CI. The browser frontend uses its own CheerpJ execution path, so changes to the emitted bytecode target require coordinated browser testing.
 
 ## Build
 
@@ -151,7 +154,7 @@ cd pasta/folia-phantom
 mvn clean verify
 ```
 
-Package release-style artifacts with:
+Run the build with JDK 21 selected. Package release-style artifacts with:
 
 ```bash
 mvn clean package
