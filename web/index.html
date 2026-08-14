@@ -1,86 +1,267 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>pasta</title>
-  <meta name="description" content="Patch Bukkit plugins for Folia in your browser.">
-  <link rel="icon" href="data:,">
-  <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-      font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      color: #111;
-      background: #fff;
-    }
-    main { width: min(100%, 720px); }
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    p { margin: 0 0 24px; color: #666; }
-    input { width: 100%; margin-bottom: 12px; }
-    button {
-      width: 100%;
-      padding: 12px 16px;
-      border: 1px solid #111;
-      border-radius: 6px;
-      background: #111;
-      color: #fff;
-      font: inherit;
-      cursor: pointer;
-    }
-    button:disabled { opacity: .45; cursor: default; }
-    #status { min-height: 24px; margin: 14px 0 0; color: #666; }
-    #report { margin-top: 24px; }
-    #report[hidden] { display: none; }
-    .summary { margin-bottom: 12px; color: #444; }
-    .result {
-      padding: 12px 0;
-      border-top: 1px solid #ddd;
-    }
-    .result:last-of-type { border-bottom: 1px solid #ddd; }
-    .result-head {
-      display: flex;
-      gap: 12px;
-      justify-content: space-between;
-      align-items: baseline;
-    }
-    .result-name { overflow-wrap: anywhere; }
-    .result-meta { color: #666; white-space: nowrap; }
-    .result-error { margin-top: 6px; color: #900; overflow-wrap: anywhere; }
-    .links { display: flex; gap: 14px; margin-top: 8px; }
-    .links a, #report-download { color: inherit; }
-    details { margin-top: 8px; color: #555; }
-    pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
-    #report-download { display: inline-block; margin-top: 14px; }
-    footer { margin-top: 28px; font-size: 12px; color: #888; }
-    a { color: inherit; }
-  </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111111">
+    <title>pasta — Bukkit to Folia patcher</title>
+    <meta name="description" content="Patch Bukkit plugin JARs for Folia locally in your browser.">
+    <link rel="icon" href="data:,">
+    <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        :root {
+            color-scheme: light dark;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: 32px 20px;
+            color: #171717;
+            background: #f7f7f5;
+        }
+        main { width: min(100%, 820px); margin: 0 auto; }
+        h1 { margin: 0; font-size: clamp(32px, 8vw, 54px); line-height: 1; letter-spacing: -0.06em; }
+        h2 { margin: 0 0 8px; font-size: 18px; }
+        p { margin: 0; color: #666; }
+        a { color: inherit; }
+        button, input { font: inherit; }
+        button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+            outline: 3px solid currentColor;
+            outline-offset: 3px;
+        }
+        .eyebrow {
+            margin-bottom: 12px;
+            color: #555;
+            font-size: 12px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .lede { margin-top: 14px; max-width: 66ch; font-size: 16px; }
+        .privacy {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 18px;
+            padding: 7px 10px;
+            border: 1px solid #d2d2cc;
+            border-radius: 999px;
+            font-size: 12px;
+            color: #4d4d4d;
+            background: #fff;
+        }
+        .privacy::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #27863b;
+        }
+        .panel {
+            margin-top: 28px;
+            padding: 22px;
+            border: 1px solid #d2d2cc;
+            border-radius: 14px;
+            background: #fff;
+        }
+        .drop-zone {
+            display: grid;
+            place-items: center;
+            min-height: 170px;
+            padding: 28px;
+            border: 2px dashed #b7b7b0;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .15s ease, background .15s ease, transform .15s ease;
+        }
+        .drop-zone:hover, .drop-zone.is-dragging {
+            border-color: #111;
+            background: #f4f4f0;
+        }
+        .drop-zone.is-dragging { transform: scale(1.005); }
+        .drop-zone[aria-disabled="true"] { opacity: .55; cursor: default; }
+        .drop-title { display: block; color: #111; font-weight: 700; font-size: 17px; }
+        .drop-hint { display: block; margin-top: 7px; color: #777; font-size: 13px; }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .selection { margin-top: 18px; }
+        .selection-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: baseline;
+        }
+        .selection-list {
+            display: grid;
+            gap: 7px;
+            margin: 10px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+        .selection-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 9px 11px;
+            border-radius: 8px;
+            background: #f5f5f2;
+            font-size: 13px;
+        }
+        .selection-name { min-width: 0; overflow-wrap: anywhere; }
+        .selection-state { color: #666; white-space: nowrap; }
+        .actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        button {
+            min-height: 44px;
+            padding: 10px 16px;
+            border: 1px solid #111;
+            border-radius: 8px;
+            background: #111;
+            color: #fff;
+            cursor: pointer;
+        }
+        button.secondary { background: transparent; color: #111; }
+        button:disabled { opacity: .4; cursor: default; }
+        .progress-wrap { margin-top: 16px; }
+        progress { width: 100%; height: 8px; accent-color: #111; }
+        #status { min-height: 24px; margin-top: 10px; color: #666; }
+        #report { margin-top: 28px; }
+        #report[hidden], .selection[hidden], .progress-wrap[hidden] { display: none; }
+        .summary { margin-bottom: 12px; color: #444; }
+        .result { padding: 14px 0; border-top: 1px solid #ddd; }
+        .result:last-of-type { border-bottom: 1px solid #ddd; }
+        .result-head {
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .result-name { overflow-wrap: anywhere; }
+        .result-meta { color: #666; white-space: nowrap; font-size: 12px; }
+        .result-error { margin-top: 7px; color: #8b1a1a; overflow-wrap: anywhere; }
+        .links { display: flex; gap: 14px; margin-top: 9px; }
+        .links a, #report-download { font-weight: 700; }
+        details { margin-top: 9px; color: #555; }
+        pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+        #report-download { display: inline-block; margin-top: 16px; }
+        .modes {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .mode {
+            padding: 14px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            color: #555;
+            font-size: 12px;
+        }
+        .mode strong { display: block; margin-bottom: 5px; color: #222; font-size: 13px; }
+        footer { margin-top: 28px; font-size: 12px; color: #777; }
+        @media (max-width: 640px) {
+            body { padding: 24px 14px; }
+            .panel { padding: 16px; }
+            .actions { grid-template-columns: 1fr; }
+            .modes { grid-template-columns: 1fr; }
+            .result-head, .selection-item { align-items: flex-start; flex-direction: column; gap: 4px; }
+            .result-meta, .selection-state { white-space: normal; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .drop-zone { transition: none; }
+        }
+        @media (prefers-color-scheme: dark) {
+            body { color: #ededed; background: #111; }
+            p, #status, .drop-hint, .selection-state, .result-meta, footer { color: #aaa; }
+            .privacy, .panel { background: #181818; border-color: #3c3c3c; color: #ccc; }
+            .drop-zone { border-color: #555; }
+            .drop-zone:hover, .drop-zone.is-dragging { border-color: #eee; background: #222; }
+            .drop-title, .mode strong { color: #eee; }
+            .selection-item { background: #242424; }
+            .mode, .result { border-color: #3c3c3c; }
+            .mode, details, .summary { color: #bbb; }
+            button { border-color: #eee; background: #eee; color: #111; }
+            button.secondary { background: transparent; color: #eee; }
+            progress { accent-color: #eee; }
+        }
+    </style>
 </head>
 <body>
-  <main>
-    <h1>pasta</h1>
-    <p>Bukkit plugin → Folia</p>
+    <main>
+        <header>
+            <div class="eyebrow">Carbonara update</div>
+            <h1>pasta</h1>
+            <p class="lede">Convert Bukkit plugin JARs for Folia without installing a desktop app. Pick files, patch locally, then download the results.</p>
+            <div class="privacy">Runs locally in your browser — plugin JARs are not uploaded to pasta.</div>
+        </header>
 
-    <input id="file" type="file" multiple accept=".jar,application/java-archive">
-    <button id="patch" disabled>Patch selected</button>
-    <div id="status">Select one or more .jar files.</div>
+        <section class="panel" aria-labelledby="patch-heading">
+            <h2 id="patch-heading">Patch plugins</h2>
+            <p>Choose one or more <code>.jar</code> files. Files named <code>patched-*.jar</code> are skipped to avoid accidental double-patching.</p>
 
-    <section id="report" hidden aria-live="polite">
-      <div id="report-summary" class="summary"></div>
-      <div id="results"></div>
-      <a id="report-download" download="pasta-report.csv">Download report.csv</a>
-    </section>
+            <input id="file" class="visually-hidden" type="file" multiple accept=".jar,application/java-archive">
+            <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-controls="file" aria-describedby="drop-hint">
+                <span>
+                    <span class="drop-title">Drop plugin JARs here</span>
+                    <span id="drop-hint" class="drop-hint">or press Enter / click to browse</span>
+                </span>
+            </div>
 
-    <footer>
-      Runs locally in your browser with CheerpJ. Your plugin JARs are not uploaded to pasta.
-    </footer>
-  </main>
+            <section id="selection" class="selection" hidden aria-live="polite">
+                <div class="selection-head">
+                    <strong id="selection-summary">0 files selected</strong>
+                </div>
+                <ul id="selection-list" class="selection-list"></ul>
+            </section>
 
-  <script type="module" src="./app.js"></script>
+            <div class="actions">
+                <button id="patch" disabled>Patch selected JARs</button>
+                <button id="clear" class="secondary" disabled>Clear</button>
+            </div>
+
+            <div id="progress-wrap" class="progress-wrap" hidden>
+                <progress id="progress" value="0" max="1"></progress>
+            </div>
+            <div id="status" role="status" aria-live="polite">Select one or more .jar files.</div>
+
+            <section id="report" hidden aria-live="polite">
+                <div id="report-summary" class="summary"></div>
+                <div id="results"></div>
+                <a id="report-download" download="pasta-report.csv">Download report.csv</a>
+            </section>
+        </section>
+
+        <section class="panel" aria-labelledby="other-ways-heading">
+            <h2 id="other-ways-heading">Other ways to run pasta</h2>
+            <p>The same project also provides local CLI, desktop GUI, and server-side plugin workflows.</p>
+            <div class="modes">
+                <div class="mode"><strong>CLI</strong>Batch patch a JAR or directory from a terminal.</div>
+                <div class="mode"><strong>Desktop</strong>Use the JavaFX application for drag-and-drop workflows.</div>
+                <div class="mode"><strong>Server plugin</strong>Patch installed plugins from Bukkit/Paper commands.</div>
+            </div>
+        </section>
+
+        <footer>
+            Browser execution is powered by CheerpJ. Review the project source and usage instructions on
+            <a href="https://github.com/MARVserver/pasta">GitHub</a>.
+        </footer>
+    </main>
+
+    <script type="module" src="./app.js"></script>
 </body>
 </html>
