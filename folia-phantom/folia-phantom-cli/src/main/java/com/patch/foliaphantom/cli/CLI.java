@@ -3,109 +3,130 @@ package com.patch.foliaphantom.cli;
 import com.patch.foliaphantom.patcher.PluginPatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Locale;
 import java.util.Scanner;
 import java.util.stream.Stream;
 
 /**
- * Folia Phantom のコマンドラインインターフェース。
+ * Command-line interface for patching Bukkit plugin JARs for Folia.
  *
- * <p>Bukkit プラグイン JAR を Folia 互換にパッチするための
- * コマンドラインツール。単一 JAR のパッチ、ディレクトリ内の
- * 全 JAR の一括パッチ、対話モードの3つの動作モードを提供する。</p>
- *
- * <p>使用法:
- * <pre>
- *   java -jar Folia-Phantom-CLI-1.0.0.jar path/to/plugin.jar
- *   java -jar Folia-Phantom-CLI-1.0.0.jar path/to/jars/
- *   java -jar Folia-Phantom-CLI-1.0.0.jar
- * </pre>
- * </p>
+ * <p>Supports a single JAR, all JARs in a directory, or interactive input when no path is supplied.</p>
  */
 public final class CLI {
 
-    /** ロガーインスタンス */
     private static final Logger log = LoggerFactory.getLogger(CLI.class);
-
-    /** デフォルトの出力ディレクトリ名 */
     private static final String DEFAULT_OUTPUT_DIR = "patched-plugins";
-
-    /** JAR ファイルの拡張子 */
     private static final String JAR_EXTENSION = ".jar";
 
     private CLI() {
         throw new UnsupportedOperationException("Utility class");
     }
 
-    /**
-     * エントリポイント。
-     *
-     * <p>コマンドライン引数に応じて動作を切り替える:
-     * <ul>
-     *   <li>引数あり: ファイルまたはディレクトリとして処理</li>
-     *   <li>引数なし: 対話モードで起動</li>
-     * </ul>
-     * </p>
-     *
-     * @param args コマンドライン引数
-     */
     public static void main(String[] args) {
-        // ロガー設定 + バナー表示
         configureLogger();
-        displayBanner();
 
-        // 入力パスの解決
-        Path inputPath = resolveInputPath(args);
+        final CliOptions options;
+        try {
+            options = parseArgs(args);
+        } catch (IllegalArgumentException error) {
+            System.err.println("Error: " + error.getMessage());
+            System.err.println();
+            printUsage();
+            return;
+        }
+
+        if (options.help()) {
+            printUsage();
+            return;
+        }
+
+        if (!options.noBanner()) {
+            displayBanner();
+        }
+
+        Path inputPath = resolveInputPath(options.inputPath());
         if (inputPath == null) {
             return;
         }
 
-        // 出力ディレクトリの生成
-        Path outputDir = Paths.get(DEFAULT_OUTPUT_DIR);
-        PluginPatcher patcher = new PluginPatcher(outputDir, true);
+        PluginPatcher patcher = new PluginPatcher(options.outputDir(), true);
 
         try {
-            // 単一JAR または ディレクトリ内全JAR のパッチ
             if (Files.isDirectory(inputPath)) {
                 patchDirectory(patcher, inputPath);
             } else {
                 patchSingleFile(patcher, inputPath);
             }
-            log.info("All patching operations completed successfully.");
-        } catch (IOException e) {
-            log.error("Patching failed: {}", e.getMessage(), e);
+            log.info("Patching completed. Output directory: {}", options.outputDir().toAbsolutePath());
+        } catch (IOException error) {
+            log.error("Patching failed: {}", error.getMessage(), error);
             System.exit(1);
         }
     }
 
-    /**
-     * コマンドライン引数または対話入力から入力パスを解決する。
-     *
-     * @param args コマンドライン引数
-     * @return 解決された入力パス、キャンセル時は null
-     */
-    private static Path resolveInputPath(String[] args) {
-        if (args.length > 0) {
-            Path path = Paths.get(args[0]);
-            if (!Files.exists(path)) {
-                log.error("Input path does not exist: {}", path.toAbsolutePath());
+    private static CliOptions parseArgs(String[] args) {
+        Path inputPath = null;
+        Path outputDir = Paths.get(DEFAULT_OUTPUT_DIR);
+        boolean help = false;
+        boolean noBanner = false;
+        boolean endOfOptions = false;
+
+        for (int index = 0; index < args.length; index++) {
+            String argument = args[index];
+
+            if (!endOfOptions && "--".equals(argument)) {
+                endOfOptions = true;
+                continue;
+            }
+
+            if (!endOfOptions && ("-h".equals(argument) || "--help".equals(argument))) {
+                help = true;
+                continue;
+            }
+
+            if (!endOfOptions && "--no-banner".equals(argument)) {
+                noBanner = true;
+                continue;
+            }
+
+            if (!endOfOptions && ("-o".equals(argument) || "--output".equals(argument))) {
+                if (index + 1 >= args.length) {
+                    throw new IllegalArgumentException(argument + " requires a directory path");
+                }
+                outputDir = Paths.get(args[++index]);
+                continue;
+            }
+
+            if (!endOfOptions && argument.startsWith("-")) {
+                throw new IllegalArgumentException("Unknown option: " + argument);
+            }
+
+            if (inputPath != null) {
+                throw new IllegalArgumentException("Only one input JAR or directory can be supplied");
+            }
+            inputPath = Paths.get(argument);
+        }
+
+        return new CliOptions(inputPath, outputDir, help, noBanner);
+    }
+
+    private static Path resolveInputPath(Path suppliedPath) {
+        if (suppliedPath != null) {
+            if (!Files.exists(suppliedPath)) {
+                log.error("Input path does not exist: {}", suppliedPath.toAbsolutePath());
                 return null;
             }
-            return path;
+            return suppliedPath;
         }
-        // 対話モード
         return promptForPath();
     }
 
-    /**
-     * 対話モードでパスを入力させる。
-     *
-     * @return 入力されたパス、キャンセル時は null
-     */
     private static Path promptForPath() {
         try (Scanner scanner = new Scanner(System.in)) {
             System.out.print("Enter path to plugin JAR or directory: ");
@@ -114,6 +135,7 @@ public final class CLI {
                 log.error("No path provided.");
                 return null;
             }
+
             Path path = Paths.get(input);
             if (!Files.exists(path)) {
                 log.error("Path does not exist: {}", path.toAbsolutePath());
@@ -123,63 +145,55 @@ public final class CLI {
         }
     }
 
-    /**
-     * ディレクトリ内の全 JAR ファイルを一括パッチする。
-     *
-     * @param patcher PluginPatcher インスタンス
-     * @param dir     対象ディレクトリ
-     * @throws IOException パッチ処理に失敗した場合
-     */
     private static void patchDirectory(PluginPatcher patcher, Path dir) throws IOException {
         log.info("Patching all JAR files in directory: {}", dir.toAbsolutePath());
         try (Stream<Path> files = Files.list(dir)) {
             List<Path> jarFiles = files
-                    .filter(f -> f.toString().endsWith(JAR_EXTENSION))
+                    .filter(Files::isRegularFile)
+                    .filter(CLI::hasJarExtension)
+                    .filter(path -> !path.getFileName().toString().toLowerCase(Locale.ROOT).startsWith("patched-"))
+                    .sorted()
                     .toList();
+
             if (jarFiles.isEmpty()) {
-                log.warn("No JAR files found in directory: {}", dir.toAbsolutePath());
+                log.warn("No patchable JAR files found in directory: {}", dir.toAbsolutePath());
                 return;
             }
+
+            log.info("Found {} patchable JAR{}.", jarFiles.size(), jarFiles.size() == 1 ? "" : "s");
             for (Path jarFile : jarFiles) {
                 patcher.patchPlugin(jarFile);
             }
         }
     }
 
-    /**
-     * 単一の JAR ファイルをパッチする。
-     *
-     * @param patcher PluginPatcher インスタンス
-     * @param jarFile 対象 JAR ファイル
-     * @throws IOException パッチ処理に失敗した場合
-     */
     private static void patchSingleFile(PluginPatcher patcher, Path jarFile) throws IOException {
-        if (!jarFile.toString().endsWith(JAR_EXTENSION)) {
+        if (!Files.isRegularFile(jarFile)) {
+            log.warn("Input is not a regular file: {}", jarFile.toAbsolutePath());
+            return;
+        }
+        if (!hasJarExtension(jarFile)) {
             log.warn("File is not a JAR: {}", jarFile.getFileName());
+            return;
+        }
+        if (jarFile.getFileName().toString().toLowerCase(Locale.ROOT).startsWith("patched-")) {
+            log.warn("Skipping already-patched JAR: {}", jarFile.getFileName());
             return;
         }
         patcher.patchPlugin(jarFile);
     }
 
-    /**
-     * 簡易ロガー設定を行う。
-     *
-     * <p>SLF4J のシンプルロガーを使って標準出力にログを出力する。</p>
-     */
-    private static void configureLogger() {
-        System.setProperty(
-                "org.slf4j.simpleLogger.defaultLogLevel", "info");
-        System.setProperty(
-                "org.slf4j.simpleLogger.showDateTime", "true");
-        System.setProperty(
-                "org.slf4j.simpleLogger.dateTimeFormat", "HH:mm:ss");
-        System.setProperty(
-                "org.slf4j.simpleLogger.showThreadName", "false");
+    private static boolean hasJarExtension(Path path) {
+        return path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(JAR_EXTENSION);
     }
 
-    /**
-     * 起動バナーを表示する。
-     */
+    private static void configureLogger() {
+        System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "info");
+        System.setProperty("org.slf4j.simpleLogger.showDateTime", "true");
+        System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "HH:mm:ss");
+        System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
+    }
+
     private static void displayBanner() {
         System.out.println();
         System.out.println("  ███████╗ ██████╗ ██╗     ██╗ █████╗ ");
@@ -191,5 +205,24 @@ public final class CLI {
         System.out.println("  Folia Phantom CLI — pasta v2.0.0");
         System.out.println("  Bukkit → Folia bytecode transformer");
         System.out.println();
+    }
+
+    private static void printUsage() {
+        System.out.println("pasta — Bukkit to Folia bytecode transformer");
+        System.out.println();
+        System.out.println("Usage:");
+        System.out.println("  java -jar Folia-Phantom-CLI-2.0.0.jar [options] <plugin.jar|directory>");
+        System.out.println("  java -jar Folia-Phantom-CLI-2.0.0.jar [options]");
+        System.out.println();
+        System.out.println("Options:");
+        System.out.println("  -o, --output <dir>  Write patched JARs to this directory");
+        System.out.println("  --no-banner         Suppress the startup banner");
+        System.out.println("  -h, --help          Show this help message");
+        System.out.println("  --                   Stop parsing options (for paths beginning with '-')");
+        System.out.println();
+        System.out.println("Default output directory: " + DEFAULT_OUTPUT_DIR);
+    }
+
+    private record CliOptions(Path inputPath, Path outputDir, boolean help, boolean noBanner) {
     }
 }
