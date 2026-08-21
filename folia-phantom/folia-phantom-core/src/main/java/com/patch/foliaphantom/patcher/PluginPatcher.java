@@ -14,6 +14,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -44,6 +45,10 @@ public final class PluginPatcher {
 
     private static final Logger log = LoggerFactory.getLogger(PluginPatcher.class);
     private static final int ASM_API = Opcodes.ASM9;
+    private static final long MAX_INPUT_BYTES = 256L * 1024 * 1024;
+    private static final long MAX_ENTRY_UNCOMPRESSED_BYTES = 64L * 1024 * 1024;
+    private static final long MAX_TOTAL_UNCOMPRESSED_BYTES = 512L * 1024 * 1024;
+    private static final int MAX_ENTRY_COUNT = 100_000;
     private static final byte[] BUKKIT_CONSTANT_POOL_MARKER =
             "org/bukkit/".getBytes(StandardCharsets.US_ASCII);
     private static final String[] RUNTIME_CLASSES = {
@@ -95,6 +100,10 @@ public final class PluginPatcher {
             log.warn("Skipping already-patched JAR: {}", fileName);
             return jarPath;
         }
+        long inputSize = Files.size(jarPath);
+        if (inputSize > MAX_INPUT_BYTES) {
+            throw new IOException("Plugin JAR exceeds maximum input size of " + MAX_INPUT_BYTES + " bytes: " + fileName);
+        }
 
         long startedAt = System.nanoTime();
         patchedClassCount.set(0);
@@ -134,6 +143,8 @@ public final class PluginPatcher {
 
     private List<PreparedEntry> readAndPrepareEntries(Path jarPath) throws IOException {
         List<PreparedEntry> entries = new ArrayList<>();
+        long totalUncompressedBytes = 0;
+        int entryCount = 0;
         try (JarInputStream input = new JarInputStream(Files.newInputStream(jarPath))) {
             JarEntry entry;
             while ((entry = input.getNextJarEntry()) != null) {
@@ -141,8 +152,17 @@ public final class PluginPatcher {
                 if (entry.isDirectory() || isSignatureFile(name)) {
                     continue;
                 }
+                entryCount++;
+                if (entryCount > MAX_ENTRY_COUNT) {
+                    throw new IOException("Plugin JAR exceeds maximum entry count of " + MAX_ENTRY_COUNT);
+                }
 
-                byte[] content = input.readAllBytes();
+                byte[] content = readEntryBounded(input, name);
+                totalUncompressedBytes += content.length;
+                if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                    throw new IOException("Plugin JAR exceeds maximum expanded size of "
+                            + MAX_TOTAL_UNCOMPRESSED_BYTES + " bytes");
+                }
                 if ("plugin.yml".equals(name)) {
                     entries.add(PreparedEntry.direct(name, modifyPluginYml(content)));
                 } else if (name.endsWith(".class")) {
@@ -161,12 +181,27 @@ public final class PluginPatcher {
         return entries;
     }
 
+    private static byte[] readEntryBounded(InputStream input, String entryName) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        long entryBytes = 0;
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            entryBytes += read;
+            if (entryBytes > MAX_ENTRY_UNCOMPRESSED_BYTES) {
+                throw new IOException("JAR entry exceeds maximum expanded size of "
+                        + MAX_ENTRY_UNCOMPRESSED_BYTES + " bytes: " + entryName);
+            }
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
+    }
+
     private byte[] transformClass(String entryName, byte[] classBytes) {
         String className = entryName.substring(0, entryName.length() - ".class".length())
                 .replace('/', '.');
 
         try {
-            // Most library classes do not reference Bukkit at all. Avoid constructing ASM visitors for them.
             if (!containsBytes(classBytes, BUKKIT_CONSTANT_POOL_MARKER) || !needsPatching(classBytes)) {
                 skippedClassCount.incrementAndGet();
                 if (verbose) {
@@ -301,12 +336,6 @@ public final class PluginPatcher {
                 .toList();
     }
 
-    /**
-     * ASM normally loads referenced classes while computing stack map frames. Plugin dependencies
-     * such as Bukkit/Paper are intentionally absent from the CLI and browser runtime, so fall back
-     * to Object when an external type cannot be resolved. Resolvable JDK/application types still use
-     * ASM's normal hierarchy calculation.
-     */
     private static final class SafeClassWriter extends ClassWriter {
 
         private SafeClassWriter(int flags) {
