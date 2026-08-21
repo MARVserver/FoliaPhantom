@@ -14,6 +14,8 @@ const resultsContainer = document.getElementById("results");
 const reportDownload = document.getElementById("report-download");
 
 let patcherPromise;
+let runtimeInitMs = null;
+let runtimeState = "idle";
 let objectUrls = [];
 let selectedFileList = [];
 let isBusy = false;
@@ -59,7 +61,7 @@ clearButton.addEventListener("click", () => {
     selectedFileList = [];
     clearReport();
     renderSelection();
-    status.textContent = "Select one or more .jar files.";
+    updateSelectionStatus();
 });
 
 patchButton.addEventListener("click", async () => {
@@ -77,21 +79,33 @@ patchButton.addEventListener("click", async () => {
     let currentPatchable = 0;
 
     try {
-        status.textContent = "Loading Java runtime…";
+        status.textContent = runtimeState === "ready"
+            ? "Java runtime ready. Starting patch…"
+            : "Loading Java runtime…";
         const patcher = await getPatcher();
 
         for (let index = 0; index < files.length; index++) {
             const file = files[index];
 
             if (!isJar(file)) {
-                results.push(emptyResult(file.name, "skipped", "Not a .jar file."));
+                results.push(emptyResult(
+                        file.name,
+                        "skipped",
+                        "Not a .jar file.",
+                        file.size,
+                        0));
                 progress.value = index + 1;
                 renderReport(results, files.length);
                 continue;
             }
 
             if (isAlreadyPatched(file)) {
-                results.push(emptyResult(file.name, "skipped", "Already patched."));
+                results.push(emptyResult(
+                        file.name,
+                        "skipped",
+                        "Already patched.",
+                        file.size,
+                        0));
                 progress.value = index + 1;
                 renderReport(results, files.length);
                 continue;
@@ -103,19 +117,24 @@ patchButton.addEventListener("click", async () => {
             const safeName = `input-${index}-${sanitizeFileName(file.name)}`;
             const inputPath = `/str/${safeName}`;
             const outputPath = `/files/patched-${safeName}`;
+            const patchStartedAt = performance.now();
 
             try {
-                const bytes = new Uint8Array(await file.arrayBuffer());
-                cheerpOSAddStringFile(inputPath, bytes);
+                cheerpOSAddStringFile(
+                        inputPath,
+                        new Uint8Array(await file.arrayBuffer()));
 
                 const rawReport = await patcher.patch(inputPath);
                 const parsed = parsePatchReport(String(rawReport));
                 const blob = await cjFileBlob(outputPath);
                 const resultUrl = URL.createObjectURL(blob);
                 objectUrls.push(resultUrl);
+                const patchMs = performance.now() - patchStartedAt;
 
                 results.push({
                     file: file.name,
+                    sizeBytes: file.size,
+                    patchMs,
                     status: parsed.failed > 0 ? "partial" : "success",
                     patched: parsed.patched,
                     skipped: parsed.skipped,
@@ -136,7 +155,12 @@ patchButton.addEventListener("click", async () => {
                 }
             } catch (error) {
                 console.error(error);
-                results.push(emptyResult(file.name, "failed", await errorMessage(error)));
+                results.push(emptyResult(
+                        file.name,
+                        "failed",
+                        await errorMessage(error),
+                        file.size,
+                        performance.now() - patchStartedAt));
             } finally {
                 cheerpOSRemoveStringFile(inputPath);
             }
@@ -146,7 +170,13 @@ patchButton.addEventListener("click", async () => {
         }
 
         const counts = resultCounts(results);
-        status.textContent = `Done. ${counts.success} succeeded, ${counts.partial} partial, ${counts.failed} failed, ${counts.skipped} skipped.`;
+        const totalPatchMs = results.reduce(
+                (sum, result) => sum + (result.patchMs || 0),
+                0);
+        const timing = totalPatchMs > 0
+            ? ` Processing time ${formatDuration(totalPatchMs)}.`
+            : "";
+        status.textContent = `Done. ${counts.success} succeeded, ${counts.partial} partial, ${counts.failed} failed, ${counts.skipped} skipped.${timing}`;
         updateReportDownload(results);
 
         const downloadable = results.filter(hasOutput);
@@ -167,17 +197,57 @@ function setSelectedFiles(files) {
     selectedFileList = uniqueFiles(files);
     clearReport();
     renderSelection();
+    updateSelectionStatus();
 
+    if (selectedFileList.some(isPatchableJar)) {
+        void warmPatcher();
+    }
+}
+
+async function warmPatcher() {
+    const warmPromise = getPatcher();
+    if (!isBusy) updateSelectionStatus();
+
+    try {
+        await warmPromise;
+    } catch (error) {
+        console.warn("Could not preload Java runtime", error);
+    }
+
+    if (!isBusy) updateSelectionStatus();
+}
+
+function selectionStatusBase() {
     const patchable = selectedFileList.filter(isPatchableJar);
     const ignored = selectedFileList.length - patchable.length;
 
     if (selectedFileList.length === 0) {
-        status.textContent = "Select one or more .jar files.";
-    } else if (ignored > 0) {
-        status.textContent = `${patchable.length} ready, ${ignored} will be skipped.`;
-    } else {
-        status.textContent = `${patchable.length} file${patchable.length === 1 ? "" : "s"} ready to patch.`;
+        return "Select one or more .jar files.";
     }
+    if (ignored > 0) {
+        return `${patchable.length} ready, ${ignored} will be skipped.`;
+    }
+    return `${patchable.length} file${patchable.length === 1 ? "" : "s"} ready to patch.`;
+}
+
+function runtimeStatusSuffix() {
+    if (!selectedFileList.some(isPatchableJar)) return "";
+
+    if (runtimeState === "loading") {
+        return " Preparing Java runtime…";
+    }
+    if (runtimeState === "ready") {
+        const timing = runtimeInitMs === null ? "" : ` in ${formatDuration(runtimeInitMs)}`;
+        return ` Runtime ready${timing}.`;
+    }
+    if (runtimeState === "failed") {
+        return " Runtime preload failed; Patch will retry.";
+    }
+    return "";
+}
+
+function updateSelectionStatus() {
+    status.textContent = selectionStatusBase() + runtimeStatusSuffix();
 }
 
 function uniqueFiles(files) {
@@ -238,6 +308,10 @@ function setBusy(busy) {
 
 async function getPatcher() {
     if (!patcherPromise) {
+        runtimeState = "loading";
+        runtimeInitMs = null;
+        const startedAt = performance.now();
+
         patcherPromise = (async () => {
             await cheerpjInit({ version: 17, status: "none" });
 
@@ -246,10 +320,18 @@ async function getPatcher() {
             const library = await cheerpjRunLibrary(libraryPath);
             const WebPatcher = await library.com.patch.foliaphantom.web.WebPatcher;
             return await new WebPatcher();
-        })().catch(error => {
-            patcherPromise = undefined;
-            throw error;
-        });
+        })()
+            .then(patcher => {
+                runtimeInitMs = performance.now() - startedAt;
+                runtimeState = "ready";
+                return patcher;
+            })
+            .catch(error => {
+                patcherPromise = undefined;
+                runtimeInitMs = null;
+                runtimeState = "failed";
+                throw error;
+            });
     }
     return patcherPromise;
 }
@@ -274,9 +356,11 @@ function hasOutput(result) {
     return result.status === "success" || result.status === "partial";
 }
 
-function emptyResult(file, resultStatus, error) {
+function emptyResult(file, resultStatus, error, sizeBytes = 0, patchMs = 0) {
     return {
         file,
+        sizeBytes,
+        patchMs,
         status: resultStatus,
         patched: 0,
         skipped: 0,
@@ -304,6 +388,20 @@ function formatBytes(bytes) {
     }
 
     return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+}
+
+function formatDuration(milliseconds) {
+    if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "0 ms";
+    if (milliseconds < 1000) return `${Math.round(milliseconds)} ms`;
+
+    const seconds = milliseconds / 1000;
+    return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`;
+}
+
+function metricMilliseconds(milliseconds) {
+    return Number.isFinite(milliseconds) && milliseconds > 0
+        ? Math.round(milliseconds)
+        : 0;
 }
 
 function parsePatchReport(text) {
@@ -352,7 +450,20 @@ function renderReport(results, total) {
     resultsContainer.replaceChildren(...results.map(createResultElement));
 
     const counts = resultCounts(results);
-    reportSummary.textContent = `${results.length}/${total} processed · ${counts.success} success · ${counts.partial} partial · ${counts.failed} failed · ${counts.skipped} skipped`;
+    const metrics = [];
+    if (runtimeInitMs !== null) {
+        metrics.push(`runtime ${formatDuration(runtimeInitMs)}`);
+    }
+
+    const totalPatchMs = results.reduce(
+            (sum, result) => sum + (result.patchMs || 0),
+            0);
+    if (totalPatchMs > 0) {
+        metrics.push(`patch ${formatDuration(totalPatchMs)}`);
+    }
+
+    const metricText = metrics.length > 0 ? ` · ${metrics.join(" · ")}` : "";
+    reportSummary.textContent = `${results.length}/${total} processed · ${counts.success} success · ${counts.partial} partial · ${counts.failed} failed · ${counts.skipped} skipped${metricText}`;
 }
 
 function createResultElement(result) {
@@ -368,9 +479,11 @@ function createResultElement(result) {
 
     const meta = document.createElement("span");
     meta.className = "result-meta";
+    const size = formatBytes(result.sizeBytes || 0);
+    const timing = result.patchMs > 0 ? ` · ${formatDuration(result.patchMs)}` : "";
     meta.textContent = hasOutput(result)
-        ? `${result.patched} patched / ${result.skipped} skipped / ${result.failed} unchanged`
-        : result.status;
+        ? `${result.patched} patched / ${result.skipped} skipped / ${result.failed} unchanged · ${size}${timing}`
+        : `${result.status} · ${size}${timing}`;
 
     head.append(name, meta);
     article.append(head);
@@ -426,7 +539,10 @@ function updateReportDownload(results) {
     const rows = [
         [
             "file",
+            "input_bytes",
             "status",
+            "runtime_init_ms",
+            "patch_ms",
             "patched_classes",
             "skipped_classes",
             "unchanged_classes",
@@ -436,7 +552,10 @@ function updateReportDownload(results) {
         ],
         ...results.map(result => [
             result.file,
+            result.sizeBytes,
             result.status,
+            metricMilliseconds(runtimeInitMs),
+            metricMilliseconds(result.patchMs),
             result.patched,
             result.skipped,
             result.failed,
