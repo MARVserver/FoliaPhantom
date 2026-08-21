@@ -33,6 +33,19 @@ public class PluginPatcherResourceLimitTest {
     }
 
     @Test
+    public void rejectsManifestThatExpandsPastPerEntryLimit() throws Exception {
+        Path input = createJarWithRepeatedBytes(
+                "manifest-bomb.jar",
+                "META-INF/MANIFEST.MF",
+                4096);
+        PluginPatcher patcher = patcherWithLimits(1_000_000, 1024, 8192, 10);
+
+        IOException exception = assertThrows(IOException.class, () -> patcher.patchPlugin(input));
+
+        assertTrue(exception.getMessage().contains("JAR entry exceeds maximum expanded size"));
+    }
+
+    @Test
     public void rejectsCombinedExpansionPastTotalLimit() throws Exception {
         Path input = temporaryFolder.getRoot().toPath().resolve("combined.jar");
         try (OutputStream file = Files.newOutputStream(input);
