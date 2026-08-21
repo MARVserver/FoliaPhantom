@@ -1,0 +1,100 @@
+name: "pasta — Peperoncino"
+description: "Patch Bukkit plugin JARs for Folia in GitHub Actions using pasta."
+author: "MARVserver"
+
+branding:
+  icon: "package"
+  color: "red"
+
+inputs:
+  input:
+    description: "Plugin JAR or directory to patch. Relative paths are resolved from GITHUB_WORKSPACE."
+    required: true
+  output:
+    description: "Directory for patched JARs. Relative paths are resolved from GITHUB_WORKSPACE."
+    required: false
+    default: "patched-plugins"
+  java-version:
+    description: "JDK used to build and run pasta."
+    required: false
+    default: "21"
+
+outputs:
+  output_directory:
+    description: "Absolute directory containing patched JARs."
+    value: ${{ steps.patch.outputs.output_directory }}
+  patched_count:
+    description: "Number of patched JARs produced by this invocation."
+    value: ${{ steps.patch.outputs.patched_count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: "temurin"
+        java-version: ${{ inputs.java-version }}
+        cache: "maven"
+        cache-dependency-path: ${{ github.action_path }}/folia-phantom/pom.xml
+
+    - name: Build pasta CLI
+      shell: bash
+      run: |
+        set -euo pipefail
+        mvn \
+          --batch-mode \
+          --no-transfer-progress \
+          -f "$GITHUB_ACTION_PATH/folia-phantom/pom.xml" \
+          -pl folia-phantom-cli \
+          -am \
+          -DskipTests \
+          package
+
+    - name: Patch plugin JARs
+      id: patch
+      shell: bash
+      env:
+        PASTA_INPUT: ${{ inputs.input }}
+        PASTA_OUTPUT: ${{ inputs.output }}
+      run: |
+        set -euo pipefail
+
+        resolve_workspace_path() {
+          local value="$1"
+          if [[ "$value" = /* ]]; then
+            printf '%s\n' "$value"
+          else
+            printf '%s/%s\n' "$GITHUB_WORKSPACE" "$value"
+          fi
+        }
+
+        input_path="$(resolve_workspace_path "$PASTA_INPUT")"
+        output_dir="$(resolve_workspace_path "$PASTA_OUTPUT")"
+
+        if [[ ! -e "$input_path" ]]; then
+          echo "::error::pasta input does not exist: $input_path"
+          exit 1
+        fi
+
+        shopt -s nullglob
+        cli_jars=("$GITHUB_ACTION_PATH"/folia-phantom/folia-phantom-cli/target/Folia-Phantom-CLI-*.jar)
+        shopt -u nullglob
+
+        if [[ ${#cli_jars[@]} -ne 1 ]]; then
+          echo "::error::Expected exactly one pasta CLI JAR, found ${#cli_jars[@]}."
+          exit 1
+        fi
+
+        mkdir -p "$output_dir"
+        java -jar "${cli_jars[0]}" --no-banner --output "$output_dir" -- "$input_path"
+
+        patched_count="$(find "$output_dir" -maxdepth 1 -type f -name 'patched-*.jar' | wc -l | tr -d '[:space:]')"
+        if [[ "$patched_count" -eq 0 ]]; then
+          echo "::error::pasta completed without producing a patched JAR."
+          exit 1
+        fi
+
+        echo "output_directory=$output_dir" >> "$GITHUB_OUTPUT"
+        echo "patched_count=$patched_count" >> "$GITHUB_OUTPUT"
+        echo "pasta produced $patched_count patched JAR(s) in $output_dir"
