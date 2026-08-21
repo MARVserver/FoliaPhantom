@@ -14,6 +14,7 @@ import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -103,23 +104,54 @@ public class PluginPatcherResourceLimitTest {
 
     @Test
     public void ordinaryPluginJarStillPatchesAndGetsFoliaMetadata() throws Exception {
-        Path input = temporaryFolder.getRoot().toPath().resolve("ordinary.jar");
-        try (OutputStream file = Files.newOutputStream(input);
-             JarOutputStream jar = new JarOutputStream(file)) {
-            writeEntry(jar, "plugin.yml", pluginYml());
-        }
+        Path input = createDescriptorJar("ordinary.jar", "plugin.yml", pluginYml());
         PluginPatcher patcher = patcherWithLimits(4096, 2048, 4096, 10);
 
         Path output = patcher.patchPlugin(input);
 
         assertTrue(Files.isRegularFile(output));
-        try (JarFile jar = new JarFile(output.toFile())) {
-            String pluginYml = new String(
-                    jar.getInputStream(jar.getJarEntry("plugin.yml")).readAllBytes(),
-                    StandardCharsets.UTF_8);
-            assertTrue(pluginYml.contains("folia-supported: true"));
-        }
+        assertDescriptorHasFoliaMetadata(output, "plugin.yml");
         assertEquals(0, patcher.getFailedClassCount());
+    }
+
+    @Test
+    public void paperPluginDescriptorGetsFoliaMetadataInSequentialMode() throws Exception {
+        Path input = createDescriptorJar("paper.jar", "paper-plugin.yml", paperPluginYml());
+        PluginPatcher patcher = patcherWithLimits(4096, 2048, 4096, 10);
+
+        Path output = patcher.patchPlugin(input);
+
+        assertDescriptorHasFoliaMetadata(output, "paper-plugin.yml");
+        assertEquals(0, patcher.getFailedClassCount());
+    }
+
+    @Test
+    public void paperPluginDescriptorGetsFoliaMetadataInParallelMode() throws Exception {
+        Path input = createDescriptorJar("paper-parallel.jar", "paper-plugin.yml", paperPluginYml());
+        PluginPatcher patcher = patcherWithLimits(4096, 2048, 4096, 10, true);
+
+        Path output = patcher.patchPlugin(input);
+
+        assertDescriptorHasFoliaMetadata(output, "paper-plugin.yml");
+        assertEquals(0, patcher.getFailedClassCount());
+    }
+
+    @Test
+    public void existingFalseFoliaMetadataIsReplacedForPaperPlugins() throws Exception {
+        byte[] descriptor = ("name: PaperPlugin\n"
+                + "version: 1.0\n"
+                + "main: example.Main\n"
+                + "folia-supported: false\n").getBytes(StandardCharsets.UTF_8);
+        Path input = createDescriptorJar("paper-false.jar", "paper-plugin.yml", descriptor);
+        PluginPatcher patcher = patcherWithLimits(4096, 2048, 4096, 10);
+
+        Path output = patcher.patchPlugin(input);
+
+        assertDescriptorHasFoliaMetadata(output, "paper-plugin.yml");
+        try (JarFile jar = new JarFile(output.toFile())) {
+            String paperPluginYml = readEntry(jar, "paper-plugin.yml");
+            assertFalse(paperPluginYml.contains("folia-supported: false"));
+        }
     }
 
     private PluginPatcher patcherWithLimits(
@@ -127,6 +159,20 @@ public class PluginPatcherResourceLimitTest {
             long maxEntryBytes,
             long maxTotalBytes,
             int maxEntryCount) {
+        return patcherWithLimits(
+                maxInputBytes,
+                maxEntryBytes,
+                maxTotalBytes,
+                maxEntryCount,
+                false);
+    }
+
+    private PluginPatcher patcherWithLimits(
+            long maxInputBytes,
+            long maxEntryBytes,
+            long maxTotalBytes,
+            int maxEntryCount,
+            boolean parallel) {
         PluginPatcher.JarResourceLimits limits = new PluginPatcher.JarResourceLimits(
                 maxInputBytes,
                 maxEntryBytes,
@@ -135,7 +181,7 @@ public class PluginPatcherResourceLimitTest {
         return new PluginPatcher(
                 temporaryFolder.getRoot().toPath().resolve("out"),
                 false,
-                false,
+                parallel,
                 limits);
     }
 
@@ -149,6 +195,30 @@ public class PluginPatcherResourceLimitTest {
         return input;
     }
 
+    private Path createDescriptorJar(String fileName, String entryName, byte[] descriptor)
+            throws IOException {
+        Path input = temporaryFolder.getRoot().toPath().resolve(fileName);
+        try (OutputStream file = Files.newOutputStream(input);
+             JarOutputStream jar = new JarOutputStream(file)) {
+            writeEntry(jar, entryName, descriptor);
+        }
+        return input;
+    }
+
+    private static void assertDescriptorHasFoliaMetadata(Path output, String entryName)
+            throws IOException {
+        try (JarFile jar = new JarFile(output.toFile())) {
+            String descriptor = readEntry(jar, entryName);
+            assertTrue(descriptor.contains("folia-supported: true"));
+        }
+    }
+
+    private static String readEntry(JarFile jar, String entryName) throws IOException {
+        return new String(
+                jar.getInputStream(jar.getJarEntry(entryName)).readAllBytes(),
+                StandardCharsets.UTF_8);
+    }
+
     private static void writeEntry(JarOutputStream jar, String name, byte[] content)
             throws IOException {
         jar.putNextEntry(new JarEntry(name));
@@ -158,6 +228,11 @@ public class PluginPatcherResourceLimitTest {
 
     private static byte[] pluginYml() {
         return "name: Ordinary\nversion: 1.0\nmain: example.Main\n"
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] paperPluginYml() {
+        return "name: PaperPlugin\nversion: 1.0\nmain: example.Main\napi-version: '1.21'\n"
                 .getBytes(StandardCharsets.UTF_8);
     }
 }
