@@ -20,9 +20,9 @@ jobs:
   folia:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -73,7 +73,7 @@ This has two useful properties:
 1. the action and transformer code cannot drift to different revisions;
 2. Peperoncino does not introduce another binary distribution channel yet.
 
-The trade-off is build time. Maven dependency caching is enabled, but a future Peperoncino milestone may use signed release artifacts after the release pipeline and provenance model are ready.
+The trade-off is build time. The initial milestone relies on the runner's local Maven repository rather than adding action-owned cache key logic. A future Peperoncino milestone may use signed release artifacts and explicit dependency caching after the release pipeline and provenance model are ready.
 
 ## Safety boundary
 
