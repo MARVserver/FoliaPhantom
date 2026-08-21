@@ -81,6 +81,17 @@ Peperoncino automates pasta's existing transformation. It does **not** prove tha
 
 A green Action run means that pasta successfully produced the transformed artifact. It must not be presented as a formal Folia compatibility certification.
 
+Input plugin JARs are treated as untrusted archives. The patcher rejects inputs that exceed any of these default resource limits before they can grow without bound in memory:
+
+| Limit | Default |
+|---|---:|
+| Compressed input JAR size | 256 MiB |
+| Expanded size of one JAR entry | 64 MiB |
+| Total expanded JAR size | 512 MiB |
+| JAR entry count | 100,000 |
+
+The expanded-size and entry-count limits apply to every archive entry, including directories and signature files that pasta later discards. This prevents skipped entries from bypassing the archive resource boundary.
+
 Future Peperoncino work can add static-analysis/reporting signals separately from transformation so CI can distinguish:
 
 - transformation success;
@@ -96,3 +107,5 @@ The repository includes `.github/workflows/action-smoke.yml`, which:
 2. runs the repository's own `action.yml`;
 3. verifies exactly one output JAR is created;
 4. verifies the patched `plugin.yml` contains `folia-supported: true`.
+
+The core test suite also covers compressed-input, per-entry expansion, total expansion, entry-count, discarded signature-entry, and normal-plugin cases for the JAR resource boundary.
