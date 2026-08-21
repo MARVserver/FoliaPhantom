@@ -14,6 +14,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -30,9 +31,10 @@ import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
-import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * JAR 全体のパッチ処理を統括するオーケストレーター。
@@ -44,6 +46,11 @@ public final class PluginPatcher {
 
     private static final Logger log = LoggerFactory.getLogger(PluginPatcher.class);
     private static final int ASM_API = Opcodes.ASM9;
+    private static final JarResourceLimits DEFAULT_RESOURCE_LIMITS = new JarResourceLimits(
+            256L * 1024 * 1024,
+            64L * 1024 * 1024,
+            512L * 1024 * 1024,
+            100_000);
     private static final byte[] BUKKIT_CONSTANT_POOL_MARKER =
             "org/bukkit/".getBytes(StandardCharsets.US_ASCII);
     private static final String[] RUNTIME_CLASSES = {
@@ -59,6 +66,7 @@ public final class PluginPatcher {
     private final Path outputDir;
     private final boolean verbose;
     private final boolean parallel;
+    private final JarResourceLimits resourceLimits;
     private final AtomicInteger patchedClassCount = new AtomicInteger();
     private final AtomicInteger skippedClassCount = new AtomicInteger();
     private final AtomicInteger failedClassCount = new AtomicInteger();
@@ -75,9 +83,18 @@ public final class PluginPatcher {
      *                 disable this to avoid worker/thread emulation overhead and improve stability.
      */
     public PluginPatcher(Path outputDir, boolean verbose, boolean parallel) {
+        this(outputDir, verbose, parallel, DEFAULT_RESOURCE_LIMITS);
+    }
+
+    PluginPatcher(
+            Path outputDir,
+            boolean verbose,
+            boolean parallel,
+            JarResourceLimits resourceLimits) {
         this.outputDir = outputDir;
         this.verbose = verbose;
         this.parallel = parallel;
+        this.resourceLimits = resourceLimits;
         int processors = Runtime.getRuntime().availableProcessors();
         int parallelism = Math.max(1, processors > 2 ? processors - 1 : processors);
         this.forkJoinPool = parallel ? new ForkJoinPool(parallelism) : null;
@@ -94,6 +111,11 @@ public final class PluginPatcher {
         if (fileName.startsWith("patched-")) {
             log.warn("Skipping already-patched JAR: {}", fileName);
             return jarPath;
+        }
+        long inputSize = Files.size(jarPath);
+        if (inputSize > resourceLimits.maxInputBytes()) {
+            throw new IOException("Plugin JAR exceeds maximum input size of "
+                    + resourceLimits.maxInputBytes() + " bytes: " + fileName);
         }
 
         long startedAt = System.nanoTime();
@@ -134,15 +156,33 @@ public final class PluginPatcher {
 
     private List<PreparedEntry> readAndPrepareEntries(Path jarPath) throws IOException {
         List<PreparedEntry> entries = new ArrayList<>();
-        try (JarInputStream input = new JarInputStream(Files.newInputStream(jarPath))) {
-            JarEntry entry;
-            while ((entry = input.getNextJarEntry()) != null) {
+        long totalUncompressedBytes = 0;
+        int entryCount = 0;
+        try (ZipInputStream input = new ZipInputStream(Files.newInputStream(jarPath))) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
+                entryCount++;
+                if (entryCount > resourceLimits.maxEntryCount()) {
+                    throw new IOException("Plugin JAR exceeds maximum entry count of "
+                            + resourceLimits.maxEntryCount());
+                }
+
                 String name = entry.getName();
-                if (entry.isDirectory() || isSignatureFile(name)) {
+                boolean retainContent = !entry.isDirectory() && !isSignatureFile(name);
+                long remainingTotalBytes = resourceLimits.maxTotalUncompressedBytes()
+                        - totalUncompressedBytes;
+                ReadEntryResult readResult = readEntryBounded(
+                        input,
+                        entry,
+                        remainingTotalBytes,
+                        retainContent);
+                totalUncompressedBytes += readResult.uncompressedBytes();
+
+                if (!retainContent) {
                     continue;
                 }
 
-                byte[] content = input.readAllBytes();
+                byte[] content = readResult.content();
                 if ("plugin.yml".equals(name)) {
                     entries.add(PreparedEntry.direct(name, modifyPluginYml(content)));
                 } else if (name.endsWith(".class")) {
@@ -161,12 +201,56 @@ public final class PluginPatcher {
         return entries;
     }
 
+    private ReadEntryResult readEntryBounded(
+            InputStream input,
+            ZipEntry entry,
+            long remainingTotalBytes,
+            boolean retainContent) throws IOException {
+        long declaredSize = entry.getSize();
+        if (declaredSize > resourceLimits.maxEntryUncompressedBytes()) {
+            throw entrySizeLimitException();
+        }
+        if (declaredSize > remainingTotalBytes) {
+            throw totalSizeLimitException();
+        }
+
+        ByteArrayOutputStream output = retainContent ? new ByteArrayOutputStream() : null;
+        byte[] buffer = new byte[8192];
+        long entryBytes = 0;
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            if (read == 0) {
+                continue;
+            }
+            entryBytes += read;
+            if (entryBytes > resourceLimits.maxEntryUncompressedBytes()) {
+                throw entrySizeLimitException();
+            }
+            if (entryBytes > remainingTotalBytes) {
+                throw totalSizeLimitException();
+            }
+            if (output != null) {
+                output.write(buffer, 0, read);
+            }
+        }
+        return new ReadEntryResult(output == null ? null : output.toByteArray(), entryBytes);
+    }
+
+    private IOException entrySizeLimitException() {
+        return new IOException("JAR entry exceeds maximum expanded size of "
+                + resourceLimits.maxEntryUncompressedBytes() + " bytes");
+    }
+
+    private IOException totalSizeLimitException() {
+        return new IOException("Plugin JAR exceeds maximum expanded size of "
+                + resourceLimits.maxTotalUncompressedBytes() + " bytes");
+    }
+
     private byte[] transformClass(String entryName, byte[] classBytes) {
         String className = entryName.substring(0, entryName.length() - ".class".length())
                 .replace('/', '.');
 
         try {
-            // Most library classes do not reference Bukkit at all. Avoid constructing ASM visitors for them.
             if (!containsBytes(classBytes, BUKKIT_CONSTANT_POOL_MARKER) || !needsPatching(classBytes)) {
                 skippedClassCount.incrementAndGet();
                 if (verbose) {
@@ -301,12 +385,25 @@ public final class PluginPatcher {
                 .toList();
     }
 
-    /**
-     * ASM normally loads referenced classes while computing stack map frames. Plugin dependencies
-     * such as Bukkit/Paper are intentionally absent from the CLI and browser runtime, so fall back
-     * to Object when an external type cannot be resolved. Resolvable JDK/application types still use
-     * ASM's normal hierarchy calculation.
-     */
+    static record JarResourceLimits(
+            long maxInputBytes,
+            long maxEntryUncompressedBytes,
+            long maxTotalUncompressedBytes,
+            int maxEntryCount) {
+
+        JarResourceLimits {
+            if (maxInputBytes <= 0
+                    || maxEntryUncompressedBytes <= 0
+                    || maxTotalUncompressedBytes <= 0
+                    || maxEntryCount <= 0) {
+                throw new IllegalArgumentException("JAR resource limits must be positive");
+            }
+        }
+    }
+
+    private record ReadEntryResult(byte[] content, long uncompressedBytes) {
+    }
+
     private static final class SafeClassWriter extends ClassWriter {
 
         private SafeClassWriter(int flags) {
