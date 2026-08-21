@@ -1,0 +1,71 @@
+name: Peperoncino Action Smoke Test
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - action.yml
+      - folia-phantom/**
+      - .github/workflows/action-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: peperoncino-action-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Patch a fixture plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create fixture plugin
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import zipfile
+
+          plugin_yml = """name: PeperoncinoSmoke
+          version: 1.0.0
+          main: dev.marv.peperoncino.SmokePlugin
+          api-version: '1.21'
+          """
+
+          with zipfile.ZipFile("smoke-plugin.jar", "w", compression=zipfile.ZIP_DEFLATED) as jar:
+              jar.writestr("plugin.yml", plugin_yml)
+          PY
+
+      - name: Run pasta action
+        id: pasta
+        uses: ./
+        with:
+          input: smoke-plugin.jar
+          output: action-output
+
+      - name: Verify patched artifact
+        shell: bash
+        env:
+          PASTA_PATCHED_COUNT: ${{ steps.pasta.outputs.patched_count }}
+          PASTA_OUTPUT_DIRECTORY: ${{ steps.pasta.outputs.output_directory }}
+        run: |
+          set -euo pipefail
+          test "$PASTA_PATCHED_COUNT" = "1"
+          test "$PASTA_OUTPUT_DIRECTORY" = "$GITHUB_WORKSPACE/action-output"
+          test -f action-output/patched-smoke-plugin.jar
+
+          python3 - <<'PY'
+          import zipfile
+
+          with zipfile.ZipFile("action-output/patched-smoke-plugin.jar") as jar:
+              plugin_yml = jar.read("plugin.yml").decode("utf-8")
+
+          if "folia-supported: true" not in plugin_yml:
+              raise SystemExit("patched plugin.yml does not declare Folia support")
+          PY
