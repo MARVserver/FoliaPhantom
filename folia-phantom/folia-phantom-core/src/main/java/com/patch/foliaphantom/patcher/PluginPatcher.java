@@ -129,6 +129,31 @@ public final class PluginPatcher {
         int workers = parallel ? forkJoinPool.getParallelism() : 1;
         log.info("Patching plugin: {} with {} worker(s)", fileName, workers);
 
+        try {
+            if (parallel) {
+                writePreparedEntries(jarPath, outputPath);
+            } else {
+                writeSequentialEntries(jarPath, outputPath);
+            }
+        } catch (RuntimeException exception) {
+            Files.deleteIfExists(outputPath);
+            Throwable cause = exception.getCause();
+            if (cause instanceof IOException ioException) {
+                throw ioException;
+            }
+            throw exception;
+        } catch (IOException exception) {
+            Files.deleteIfExists(outputPath);
+            throw exception;
+        }
+
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+        log.info("Patch complete for: {} (patched: {}, skipped: {}, unchanged after errors: {}, elapsed: {} ms)",
+                fileName, patchedClassCount.get(), skippedClassCount.get(), failedClassCount.get(), elapsedMs);
+        return outputPath;
+    }
+
+    private void writePreparedEntries(Path jarPath, Path outputPath) throws IOException {
         List<PreparedEntry> prepared = readAndPrepareEntries(jarPath);
 
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(outputPath))) {
@@ -139,23 +164,44 @@ public final class PluginPatcher {
                 writtenNames.add(entry.name());
             }
             bundleRuntimeClasses(output, writtenNames);
-        } catch (RuntimeException exception) {
-            Files.deleteIfExists(outputPath);
-            Throwable cause = exception.getCause();
-            if (cause instanceof IOException ioException) {
-                throw ioException;
-            }
-            throw exception;
         }
+    }
 
-        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
-        log.info("Patch complete for: {} (patched: {}, skipped: {}, unchanged after errors: {}, elapsed: {} ms)",
-                fileName, patchedClassCount.get(), skippedClassCount.get(), failedClassCount.get(), elapsedMs);
-        return outputPath;
+    /**
+     * Browser mode disables parallel ASM work. Stream each retained entry directly to the output
+     * so expanded JAR contents are not all retained in Java memory at once.
+     */
+    private void writeSequentialEntries(Path jarPath, Path outputPath) throws IOException {
+        try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(outputPath))) {
+            output.setLevel(Deflater.BEST_SPEED);
+            Set<String> writtenNames = new HashSet<>();
+
+            readRetainedEntries(jarPath, (name, content) -> {
+                byte[] preparedContent = prepareSequentialContent(name, content);
+                addJarEntry(output, name, preparedContent);
+                writtenNames.add(name);
+            });
+
+            bundleRuntimeClasses(output, writtenNames);
+        }
     }
 
     private List<PreparedEntry> readAndPrepareEntries(Path jarPath) throws IOException {
         List<PreparedEntry> entries = new ArrayList<>();
+        readRetainedEntries(jarPath, (name, content) -> {
+            if (isPluginDescriptor(name)) {
+                entries.add(PreparedEntry.direct(name, modifyPluginDescriptor(content)));
+            } else if (name.endsWith(".class")) {
+                ForkJoinTask<byte[]> task = forkJoinPool.submit(() -> transformClass(name, content));
+                entries.add(PreparedEntry.async(name, task));
+            } else {
+                entries.add(PreparedEntry.direct(name, content));
+            }
+        });
+        return entries;
+    }
+
+    private void readRetainedEntries(Path jarPath, RetainedEntryConsumer consumer) throws IOException {
         long totalUncompressedBytes = 0;
         int entryCount = 0;
         try (ZipInputStream input = new ZipInputStream(Files.newInputStream(jarPath))) {
@@ -178,27 +224,21 @@ public final class PluginPatcher {
                         retainContent);
                 totalUncompressedBytes += readResult.uncompressedBytes();
 
-                if (!retainContent) {
-                    continue;
-                }
-
-                byte[] content = readResult.content();
-                if ("plugin.yml".equals(name)) {
-                    entries.add(PreparedEntry.direct(name, modifyPluginYml(content)));
-                } else if (name.endsWith(".class")) {
-                    if (parallel) {
-                        ForkJoinTask<byte[]> task = forkJoinPool.submit(
-                                () -> transformClass(name, content));
-                        entries.add(PreparedEntry.async(name, task));
-                    } else {
-                        entries.add(PreparedEntry.direct(name, transformClass(name, content)));
-                    }
-                } else {
-                    entries.add(PreparedEntry.direct(name, content));
+                if (retainContent) {
+                    consumer.accept(name, readResult.content());
                 }
             }
         }
-        return entries;
+    }
+
+    private byte[] prepareSequentialContent(String name, byte[] content) {
+        if (isPluginDescriptor(name)) {
+            return modifyPluginDescriptor(content);
+        }
+        if (name.endsWith(".class")) {
+            return transformClass(name, content);
+        }
+        return content;
     }
 
     private ReadEntryResult readEntryBounded(
@@ -314,7 +354,11 @@ public final class PluginPatcher {
         return false;
     }
 
-    private byte[] modifyPluginYml(byte[] bytes) {
+    private static boolean isPluginDescriptor(String entryName) {
+        return "plugin.yml".equals(entryName) || "paper-plugin.yml".equals(entryName);
+    }
+
+    private byte[] modifyPluginDescriptor(byte[] bytes) {
         String content = new String(bytes, StandardCharsets.UTF_8);
         if (content.contains("folia-supported: true")) {
             return bytes;
@@ -402,6 +446,11 @@ public final class PluginPatcher {
     }
 
     private record ReadEntryResult(byte[] content, long uncompressedBytes) {
+    }
+
+    @FunctionalInterface
+    private interface RetainedEntryConsumer {
+        void accept(String name, byte[] content) throws IOException;
     }
 
     private static final class SafeClassWriter extends ClassWriter {
