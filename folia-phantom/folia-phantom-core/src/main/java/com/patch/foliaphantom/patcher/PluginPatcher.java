@@ -31,9 +31,10 @@ import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
-import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * JAR 全体のパッチ処理を統括するオーケストレーター。
@@ -157,9 +158,9 @@ public final class PluginPatcher {
         List<PreparedEntry> entries = new ArrayList<>();
         long totalUncompressedBytes = 0;
         int entryCount = 0;
-        try (JarInputStream input = new JarInputStream(Files.newInputStream(jarPath))) {
-            JarEntry entry;
-            while ((entry = input.getNextJarEntry()) != null) {
+        try (ZipInputStream input = new ZipInputStream(Files.newInputStream(jarPath))) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
                 entryCount++;
                 if (entryCount > resourceLimits.maxEntryCount()) {
                     throw new IOException("Plugin JAR exceeds maximum entry count of "
@@ -202,7 +203,7 @@ public final class PluginPatcher {
 
     private ReadEntryResult readEntryBounded(
             InputStream input,
-            JarEntry entry,
+            ZipEntry entry,
             long remainingTotalBytes,
             boolean retainContent) throws IOException {
         long declaredSize = entry.getSize();
