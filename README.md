@@ -23,6 +23,19 @@ Using ASM 9.7, pasta rewrites compiled `.class` files without requiring plugin s
 
 > Bytecode transformation cannot guarantee that every Bukkit plugin is Folia-safe. Test patched plugins on a staging server before production use.
 
+## Peperoncino update
+
+**Peperoncino** adds first-class GitHub Actions integration so plugin projects can run pasta directly in CI. The initial milestone adds:
+
+- a root [`action.yml`](action.yml) composite action;
+- `input`, `output`, and `java-version` inputs;
+- `output_directory` and `patched_count` outputs for downstream workflow steps;
+- clear CI failures when an input is missing or no patched JAR is produced;
+- an end-to-end smoke workflow that patches a generated fixture plugin;
+- usage, execution-model, and safety documentation in [`PEPERONCINO.md`](PEPERONCINO.md).
+
+Peperoncino deliberately reuses the existing CLI and does not change transformer semantics. A successful Action run means that pasta produced a transformed artifact; it is not a formal certification that arbitrary plugin state is thread-safe under Folia.
+
 ## Carbonara update
 
 **Carbonara** is the current usability and contributor-experience update. It adds:
@@ -40,6 +53,7 @@ Carbonara does not change the project's `2.0.0` version by itself; versioning re
 | Mode | Best for | Requires |
 |------|----------|----------|
 | **Browser** | Quick local patching without installing a desktop app | Modern browser |
+| **GitHub Actions** | Producing Folia-patched artifacts in CI | GitHub Actions runner with Maven |
 | **CLI** | Automation and batch patching | Java 21+ recommended/validated |
 | **GUI** | Desktop drag-and-drop workflows | Java 21+ recommended/validated |
 | **Server plugin** | Patching from a Bukkit/Paper server | Java 21+ Paper-compatible server |
@@ -53,6 +67,27 @@ The static app under `web/` runs the Java patcher through CheerpJ. Plugin JARs a
 3. Review which files are ready or will be skipped.
 4. Patch and download the resulting `patched-*.jar` files.
 5. Download `pasta-report.csv` when you need a batch transformation report.
+
+### GitHub Actions
+
+Peperoncino exposes pasta as a composite action. While the update is unreleased, workflows can reference `develop`; production workflows should pin a release tag or immutable commit SHA once published.
+
+```yaml
+- name: Patch for Folia
+  id: pasta
+  uses: MARVserver/pasta@develop
+  with:
+    input: target/my-plugin.jar
+    output: build/pasta
+
+- name: Upload patched artifact
+  uses: actions/upload-artifact@v4
+  with:
+    name: my-plugin-folia
+    path: ${{ steps.pasta.outputs.output_directory }}/patched-my-plugin.jar
+```
+
+See [`PEPERONCINO.md`](PEPERONCINO.md) for the full workflow, inputs, outputs, safety boundary, and planned analyzer direction.
 
 ### CLI
 
@@ -113,7 +148,7 @@ The JavaFX app provides drag-and-drop file selection, per-file state indicators,
 - **Runtime bridge bundling** — includes Folia runtime adapter classes in patched JARs.
 - **Fast-fail scanning** — skips classes that do not require rewriting.
 - **Parallel transformation** — uses a `ForkJoinPool` for CPU-heavy class processing outside constrained browser execution.
-- **Multiple frontends** — browser, CLI, desktop GUI, and server plugin workflows share the same transformation core.
+- **Multiple frontends** — browser, CLI, desktop GUI, server plugin, and GitHub Actions workflows share the same transformation core.
 
 ## Modules
 
@@ -145,6 +180,8 @@ Transformer order is intentional because rewrites may depend on earlier normaliz
 - pasta-owned Java classes are currently compiled with Maven `--release 17`; this bytecode target is separate from the JDK required to resolve Java 21 Paper dependencies.
 
 For packaged CLI/GUI/server workflows, Java 21 is the supported baseline used by CI. The browser frontend uses its own CheerpJ execution path, so changes to the emitted bytecode target require coordinated browser testing.
+
+For the GitHub Action, `actions/setup-java` selects the requested JDK and the runner must provide Maven. GitHub-hosted Ubuntu runners are the validated baseline for the initial Peperoncino milestone.
 
 ## Build
 
