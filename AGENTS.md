@@ -60,6 +60,40 @@ Thread affinity is a correctness boundary.
 - Any new ASM rewrite should cover positive and negative cases so unrelated bytecode is not rewritten.
 - Runtime bridge changes must remain compatible with classes embedded into patched JARs.
 
+## Destruction-gated verification
+
+This repository uses a non-AI destruction gate for high-risk correctness checks. The implementation side and the verification side are intentionally asymmetric: coding agents may construct production code, but they must not author or tune the oracle that judges that code.
+
+### Trust boundary
+
+- AI/coding agents may create and modify production code, build configuration, and CI wiring.
+- AI/coding agents must not create, edit, weaken, regenerate, or replace test sources, test fixtures, snapshots, golden files, fuzz corpora, destructive scenarios, or expected-output/oracle data.
+- AI/coding agents must not inspect sealed destructive test source in order to make an implementation pass. Run the gate and work from the public failure category or invariant name instead.
+- Never delete, skip, quarantine, narrow, or add `continue-on-error` to a failing destruction check merely to obtain a green build.
+- If a production change requires new test coverage, leave the implementation coherent and explicitly record the missing invariant/test case for a human maintainer to add.
+
+### Non-AI oracle rule
+
+- Test execution and pass/fail judgment must be deterministic code. Do not call an LLM, ML model, hosted inference API, agent framework, or AI-assisted scoring service from test code.
+- Do not add OpenAI, Anthropic, Gemini/GenAI, LangChain, Ollama, or equivalent AI SDKs to any test scope.
+- A destruction test should encode an invariant rather than ask an intelligent system whether an output "looks correct."
+- Randomized destruction must use a reproducible seed. A failure report may expose the violated invariant, but agents should not depend on hidden scenario details.
+
+### Initial destruction surface
+
+`PluginPatcherResourceLimitTest` is the initial sealed destructive suite used by CI. It mechanically attacks untrusted JAR handling with oversized compressed input, per-entry expansion, total expansion, discarded signature entries, and excessive entry counts. Coding agents may run this class through the CI gate but should not read or modify it while repairing production behavior.
+
+Destructive suites should preserve these invariants as coverage grows:
+
+1. Untrusted JAR input is bounded by explicit resource limits.
+2. A failed patch operation does not leave a partial output artifact.
+3. A class transformation failure leaves the original class bytes intact.
+4. Unrelated JAR entries remain unchanged unless the product contract explicitly transforms them.
+5. Thread-affinity rules remain valid under reordered, repeated, delayed, or failed operations where such fault injection is meaningful.
+6. Verification is reproducible and independent from AI services.
+
+The GitHub Actions `Destruction Gate (non-AI)` job is a required engineering signal. Treat a red destruction gate as an invariant violation, not as a test-generation prompt.
+
 ## Web rules
 
 The browser frontend is intentionally dependency-light and privacy-preserving.
@@ -83,17 +117,18 @@ The browser frontend is intentionally dependency-light and privacy-preserving.
 
 Before changing code:
 
-1. Read the nearest relevant source and its build configuration.
-2. Search for the same behavior in other modules before adding a new abstraction.
+1. Read the nearest relevant production source and its build configuration. Coding agents must respect the destruction-gate trust boundary and not inspect sealed test implementation.
+2. Search for the same behavior in other production modules before adding a new abstraction.
 3. Make the smallest coherent change that satisfies the requirement.
 4. Do not combine version bumps, dependency upgrades, formatting sweeps, or package renames with feature work unless they are required.
 
 Before opening a PR:
 
 1. Use JDK 21 and run `mvn clean verify` from `folia-phantom/`.
-2. For browser changes, exercise file selection, drag-and-drop, success, partial failure, and reset states in a modern browser.
-3. Confirm generated/release artifacts are not committed.
-4. Update README or user documentation when CLI/UI behavior changes.
+2. Run the non-AI destruction gate without changing its oracle to fit the implementation.
+3. For browser changes, exercise file selection, drag-and-drop, success, partial failure, and reset states in a modern browser.
+4. Confirm generated/release artifacts are not committed.
+5. Update README or user documentation when CLI/UI behavior changes.
 
 ## Commit and PR guidance
 

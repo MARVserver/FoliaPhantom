@@ -57,6 +57,46 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  destruction-gate:
+    name: Destruction Gate (non-AI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: folia-phantom
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: folia-phantom/pom.xml
+
+      - name: Reject AI-assisted test oracles
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='(com\.openai|openai-java|anthropic|google\.genai|generativeai|langchain|ollama|llamaindex)'
+          if grep -RInE --include='*.java' "$forbidden" ./*/src/test; then
+            echo '::error::Test code must not use AI/LLM SDKs or AI-assisted oracles.'
+            exit 1
+          fi
+          echo 'Test-source AI dependency audit passed.'
+
+      - name: Run sealed destructive oracle
+        run: >-
+          mvn --batch-mode --no-transfer-progress
+          -pl folia-phantom-core -am
+          -Dtest=PluginPatcherResourceLimitTest
+          -Dsurefire.failIfNoSpecifiedTests=false
+          test
+
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
