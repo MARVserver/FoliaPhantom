@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -60,6 +61,9 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: folia-phantom/**/pom.xml
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: Set Maven release version
         run: >-
@@ -70,6 +74,42 @@ jobs:
 
       - name: Verify and package
         run: mvn --batch-mode --no-transfer-progress --fail-at-end clean verify
+
+      - name: Check GitHub Packages version
+        id: package
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PACKAGE_URL="https://maven.pkg.github.com/MARVserver/pasta/com/patch/folia-phantom/${VERSION}/folia-phantom-${VERSION}.pom"
+          STATUS="$(curl --location --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --user "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
+            "${PACKAGE_URL}")"
+
+          case "${STATUS}" in
+            200)
+              echo "GitHub Packages already contains com.patch:folia-phantom:${VERSION}; skipping deploy."
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "GitHub Packages does not contain version ${VERSION}; it will be published."
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unexpected GitHub Packages response: HTTP ${STATUS}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Publish Maven packages
+        if: steps.package.outputs.publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          mvn --batch-mode --no-transfer-progress --fail-at-end
+          -DskipTests deploy
 
       - name: Stage release artifacts
         run: |
