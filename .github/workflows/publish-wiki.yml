@@ -1,0 +1,50 @@
+name: Publish Wiki
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'wiki/**'
+      - '.github/workflows/publish-wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync wiki source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          wiki_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          workdir="$(mktemp -d)"
+
+          if ! git clone "$wiki_url" "$workdir/wiki"; then
+            echo '::error::The GitHub Wiki repository is not initialized yet. Create the first Wiki page once in the GitHub UI, then rerun this workflow.'
+            exit 1
+          fi
+
+          rsync -a --delete --exclude='.git/' wiki/ "$workdir/wiki/"
+          cd "$workdir/wiki"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo 'Wiki is already up to date.'
+            exit 0
+          fi
+
+          git commit -m "docs: sync wiki from ${GITHUB_SHA}"
+          git push origin HEAD
