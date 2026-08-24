@@ -1,16 +1,17 @@
 # pasta Wiki
 
-pasta is a bytecode transformation toolkit for adapting legacy Bukkit plugins to Folia.
+Choose a language / 言語を選択 / 选择语言 / 언어 선택:
 
-Choose a language:
+- [English](https://github.com/MARVserver/pasta/wiki/en-Home)
+- [日本語](https://github.com/MARVserver/pasta/wiki/ja-Home)
+- [简体中文](https://github.com/MARVserver/pasta/wiki/zh-CN-Home)
+- [繁體中文](https://github.com/MARVserver/pasta/wiki/zh-TW-Home)
+- [한국어](https://github.com/MARVserver/pasta/wiki/ko-Home)
+- [Español](https://github.com/MARVserver/pasta/wiki/es-Home)
+- [Português](https://github.com/MARVserver/pasta/wiki/pt-Home)
+- [Deutsch](https://github.com/MARVserver/pasta/wiki/de-Home)
+- [Français](https://github.com/MARVserver/pasta/wiki/fr-Home)
 
-- [English](English.md)
-- [日本語](日本語.md)
+[Translation policy](https://github.com/MARVserver/pasta/wiki/Languages)
 
-## Important
-
-A successful bytecode transformation does **not** prove that an arbitrary Bukkit plugin is fully Folia-safe. Always test patched plugins on a staging server before production use.
-
-## Source of truth
-
-The Markdown files under [`wiki/`](../wiki/) are the reviewable source for this GitHub Wiki. Changes should be made through the main repository and synchronized to the Wiki.
+> A successful bytecode transformation does **not** prove that an arbitrary Bukkit plugin is fully Folia-safe. Test patched plugins on a staging server before production use.
