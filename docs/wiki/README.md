@@ -15,6 +15,7 @@ Each language keeps the same core page structure so links and maintenance stay p
 | --- | --- | --- |
 | Home | [Home](en/Home.md) | [ホーム](ja/Home.md) |
 | Getting started | [Getting Started](en/Getting-Started.md) | [はじめに](ja/Getting-Started.md) |
+| Architecture | [Architecture](en/Architecture.md) | [アーキテクチャ](ja/Architecture.md) |
 
 ## GitHub Wiki publishing
 
