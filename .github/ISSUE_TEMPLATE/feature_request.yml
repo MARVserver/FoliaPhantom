@@ -1,0 +1,65 @@
+name: Feature request
+description: Propose a concrete, scoped improvement to pasta
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use Discussions first when the idea is still exploratory. Use this template when the problem and desired outcome are concrete enough to evaluate.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or contributor problem should pasta solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or workflow you want, not only an implementation detail.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Core transformer
+        - CLI
+        - GUI
+        - Browser
+        - Server plugin
+        - GitHub Actions
+        - Documentation
+        - Contributor experience
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workarounds, rejected approaches, or related tools/issues.
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and risk
+      description: Note any implications for Folia ownership/threading, bytecode compatibility, Java versions, plugin behavior, or deployment.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing Issues and Discussions for related requests.
+          required: true
+        - label: This request describes a concrete outcome rather than a general support question.
+          required: true

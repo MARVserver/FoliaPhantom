@@ -1,0 +1,83 @@
+name: Bug report
+description: Report a reproducible problem in pasta
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please provide enough detail to distinguish a pasta transformation defect from plugin-specific Folia concurrency behavior.
+
+  - type: input
+    id: version
+    attributes:
+      label: pasta version or commit
+      description: Release tag, commit SHA, or branch used.
+      placeholder: "v2.0.0 / abc1234 / develop"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Execution mode
+      options:
+        - Browser
+        - GitHub Actions
+        - CLI
+        - GUI
+        - Server plugin
+        - Library / custom integration
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Java version, server implementation/version, operating system, and other relevant runtime details.
+      placeholder: "Java 21, Folia 1.21.x, Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: input
+    attributes:
+      label: Input and reproduction
+      description: Describe the plugin/JAR or minimal fixture and the exact steps needed to reproduce the issue. Do not upload proprietary or sensitive artifacts without permission.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, stack traces, or transformation output
+      description: Paste relevant output. Remove credentials, tokens, private server data, and unrelated personal information.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing Issues and Discussions for the same problem.
+          required: true
+        - label: I tested with a current pasta release or recent commit when practical.
+          required: true
+        - label: I understand that successful bytecode transformation does not by itself guarantee arbitrary plugin thread safety under Folia.
+          required: true

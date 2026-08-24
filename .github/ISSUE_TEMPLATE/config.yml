@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions, ideas, and community discussion
+    url: https://github.com/MARVserver/pasta/discussions
+    about: Ask for help, explore ideas, and share pasta usage in GitHub Discussions.
