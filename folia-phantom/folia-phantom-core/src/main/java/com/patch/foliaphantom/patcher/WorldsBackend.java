@@ -49,7 +49,8 @@ public final class WorldsBackend {
             invokeBuilder(builder, "seed", Long.class, creator.seed());
             invokeBuilder(builder, "structures", Boolean.class, creator.generateStructures());
             invokeBuilder(builder, "hardcore", Boolean.class, creator.hardcore());
-            invokeBuilder(builder, "bonusChest", Boolean.class, creator.bonusChest());
+            invokeBuilder(builder, "bonusChest", Boolean.class,
+                    optionalBooleanProperty(creator, "bonusChest", false));
             invokeBuilder(builder, "dimension", dimensionClass, dimensionFor(creator, dimensionClass));
             invokeBuilder(builder, "generatorType", generatorTypeClass,
                     generatorTypeFor(creator, generatorTypeClass));
@@ -107,6 +108,17 @@ public final class WorldsBackend {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private static boolean optionalBooleanProperty(
+            WorldCreator creator, String methodName, boolean defaultValue) {
+        try {
+            Method method = creator.getClass().getMethod(methodName);
+            Object value = method.invoke(creator);
+            return value instanceof Boolean bool ? bool : defaultValue;
+        } catch (ReflectiveOperationException ignored) {
+            return defaultValue;
+        }
     }
 
     private static Object dimensionFor(WorldCreator creator, Class<?> dimensionClass)
