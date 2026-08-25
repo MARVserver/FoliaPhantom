@@ -33,10 +33,6 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -58,23 +54,6 @@ public final class FoliaPatcher {
 
     /** リージョンスケジューラ応答待ちタイムアウト（秒）。デッドロック防止に使用。 */
     private static final long FUTURE_TIMEOUT_SECONDS = 5L;
-
-    /**
-     * ワールド生成専用のシングルスレッドエグゼキュータ。
-     * 非デーモンスレッドを使用してサーバー停止時の中断を防ぐ。
-     */
-    private static final ExecutorService worldGenExecutor =
-            Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "FoliaPhantom-WorldGen-Worker");
-                t.setDaemon(false);
-                return t;
-            });
-
-    static {
-        Runtime.getRuntime().addShutdownHook(
-                new Thread(FoliaPatcher::shutdownWorldGenExecutor,
-                        "FoliaPhantom-WorldGen-Shutdown"));
-    }
 
     /** プラグインインスタンス（プラグインモード時に onEnable で設定） */
     public static Plugin plugin;
@@ -254,7 +233,7 @@ public final class FoliaPatcher {
         return runTaskTimerAsynchronously(scheduler, plugin, task, delay, period).getTaskId();
     }
 
-    public static <T> Future<T> callSyncMethod(
+    public static <T> java.util.concurrent.Future<T> callSyncMethod(
             BukkitScheduler scheduler, Plugin plugin, Callable<T> task) {
         CompletableFuture<T> future = new CompletableFuture<>();
         runTask(scheduler, plugin, () -> {
@@ -354,7 +333,6 @@ public final class FoliaPatcher {
         try {
             return future.get(FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
-            // タイムアウト時にフォールバック実行するとスケジュール済みタスクと二重実行になるため行わない
             log.warn("breakNaturally timed out; scheduled task will still execute on correct region", e);
             return false;
         }
@@ -810,15 +788,7 @@ public final class FoliaPatcher {
     // ========================================================================
 
     public static World createWorld(WorldCreator creator) {
-        Future<World> future = worldGenExecutor.submit(creator::createWorld);
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("World creation was interrupted", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Failed to create world: " + creator.name(), e.getCause());
-        }
+        return WorldsBackend.createWorld(creator);
     }
 
     public static ChunkGenerator getDefaultWorldGenerator(
@@ -884,13 +854,8 @@ public final class FoliaPatcher {
         log.info("Cancelled all running tasks");
     }
 
-    /**
-     * FoliaPatcher を安全にシャットダウンする。
-     * プラグインモードでは onDisable から呼び出す。
-     */
     public static void shutdown() {
         cancelAllTasks();
-        shutdownWorldGenExecutor();
         log.info("FoliaPatcher shut down");
     }
 
@@ -898,13 +863,6 @@ public final class FoliaPatcher {
     // 内部ヘルパー
     // ========================================================================
 
-    /**
-     * 1回限りのタスクをスケジュールし、完了後に runningTasks から自動削除する。
-     *
-     * <p>taskId を事前に確保してクロージャに取り込み、タスク完了の finally ブロックで
-     * マップから削除する。これにより繰り返しタスクではなく単発タスクのメモリリークを防ぐ。
-     * put 前にタスクが完了するレースコンディションは put 後の ExecutionState チェックで対処する。</p>
-     */
     private static BukkitTask scheduleOnce(Plugin plugin, Runnable task,
             TaskSchedulerFactory factory) {
         int taskId = taskIdCounter.getAndIncrement();
@@ -923,7 +881,6 @@ public final class FoliaPatcher {
         return result;
     }
 
-    /** 繰り返しタスク用のラッパー（自動削除なし）。 */
     private static BukkitTask wrapTask(Plugin plugin, ScheduledTask scheduledTask) {
         int taskId = taskIdCounter.getAndIncrement();
         FoliaBukkitTask task = new FoliaBukkitTask(taskId, plugin, scheduledTask);
@@ -962,23 +919,6 @@ public final class FoliaPatcher {
         return new FoliaBukkitTask(-1, plugin, ScheduledTaskStub.INSTANCE);
     }
 
-    private static void shutdownWorldGenExecutor() {
-        worldGenExecutor.shutdown();
-        try {
-            if (!worldGenExecutor.awaitTermination(30L, TimeUnit.SECONDS)) {
-                worldGenExecutor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            worldGenExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    // ========================================================================
-    // 内部型定義
-    // ========================================================================
-
-    /** scheduleOnce のスケジューラファクトリ。 */
     @FunctionalInterface
     private interface TaskSchedulerFactory {
         ScheduledTask schedule(Consumer<ScheduledTask> action);
