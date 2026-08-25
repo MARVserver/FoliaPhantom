@@ -59,7 +59,8 @@ public final class PluginPatcher {
         "com/patch/foliaphantom/patcher/FoliaPatcher$FoliaChunkGenerator.class",
         "com/patch/foliaphantom/patcher/FoliaPatcher$ScheduledTaskStub.class",
         "com/patch/foliaphantom/patcher/FoliaPatcher$TaskSchedulerFactory.class",
-        "com/patch/foliaphantom/patcher/BlockReadBridge.class"
+        "com/patch/foliaphantom/patcher/BlockReadBridge.class",
+        "com/patch/foliaphantom/patcher/WorldsBackend.class"
     };
 
     private final List<ClassTransformer> transformers;
@@ -170,10 +171,6 @@ public final class PluginPatcher {
         }
     }
 
-    /**
-     * Browser mode disables parallel ASM work. Stream each retained entry directly to the output
-     * so expanded JAR contents are not all retained in Java memory at once.
-     */
     private void writeSequentialEntries(
             Path jarPath, Path outputPath, ClassLoader frameClassLoader) throws IOException {
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(outputPath))) {
