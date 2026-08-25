@@ -8,6 +8,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
@@ -58,12 +59,7 @@ public final class BlockReadBridge {
             return operation.get();
         }
 
-        Plugin targetPlugin = FoliaPatcher.plugin;
-        if (targetPlugin == null) {
-            throw new IllegalStateException(
-                    "FoliaPatcher plugin is not initialized for region-owned block read");
-        }
-
+        Plugin targetPlugin = JavaPlugin.getProvidingPlugin(BlockReadBridge.class);
         CompletableFuture<T> future = new CompletableFuture<>();
         Bukkit.getRegionScheduler().run(targetPlugin, location, task -> {
             try {
