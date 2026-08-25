@@ -129,11 +129,12 @@ public final class PluginPatcher {
         int workers = parallel ? forkJoinPool.getParallelism() : 1;
         log.info("Patching plugin: {} with {} worker(s)", fileName, workers);
 
-        try {
+        try (java.net.URLClassLoader frameClassLoader = new java.net.URLClassLoader(
+                new java.net.URL[] {jarPath.toUri().toURL()}, getClass().getClassLoader())) {
             if (parallel) {
-                writePreparedEntries(jarPath, outputPath);
+                writePreparedEntries(jarPath, outputPath, frameClassLoader);
             } else {
-                writeSequentialEntries(jarPath, outputPath);
+                writeSequentialEntries(jarPath, outputPath, frameClassLoader);
             }
         } catch (RuntimeException exception) {
             Files.deleteIfExists(outputPath);
@@ -153,8 +154,9 @@ public final class PluginPatcher {
         return outputPath;
     }
 
-    private void writePreparedEntries(Path jarPath, Path outputPath) throws IOException {
-        List<PreparedEntry> prepared = readAndPrepareEntries(jarPath);
+    private void writePreparedEntries(
+            Path jarPath, Path outputPath, ClassLoader frameClassLoader) throws IOException {
+        List<PreparedEntry> prepared = readAndPrepareEntries(jarPath, frameClassLoader);
 
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(outputPath))) {
             output.setLevel(Deflater.BEST_SPEED);
@@ -171,13 +173,14 @@ public final class PluginPatcher {
      * Browser mode disables parallel ASM work. Stream each retained entry directly to the output
      * so expanded JAR contents are not all retained in Java memory at once.
      */
-    private void writeSequentialEntries(Path jarPath, Path outputPath) throws IOException {
+    private void writeSequentialEntries(
+            Path jarPath, Path outputPath, ClassLoader frameClassLoader) throws IOException {
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(outputPath))) {
             output.setLevel(Deflater.BEST_SPEED);
             Set<String> writtenNames = new HashSet<>();
 
             readRetainedEntries(jarPath, (name, content) -> {
-                byte[] preparedContent = prepareSequentialContent(name, content);
+                byte[] preparedContent = prepareSequentialContent(name, content, frameClassLoader);
                 addJarEntry(output, name, preparedContent);
                 writtenNames.add(name);
             });
@@ -186,13 +189,15 @@ public final class PluginPatcher {
         }
     }
 
-    private List<PreparedEntry> readAndPrepareEntries(Path jarPath) throws IOException {
+    private List<PreparedEntry> readAndPrepareEntries(
+            Path jarPath, ClassLoader frameClassLoader) throws IOException {
         List<PreparedEntry> entries = new ArrayList<>();
         readRetainedEntries(jarPath, (name, content) -> {
             if (isPluginDescriptor(name)) {
                 entries.add(PreparedEntry.direct(name, modifyPluginDescriptor(content)));
             } else if (name.endsWith(".class")) {
-                ForkJoinTask<byte[]> task = forkJoinPool.submit(() -> transformClass(name, content));
+                ForkJoinTask<byte[]> task = forkJoinPool.submit(
+                        () -> transformClass(name, content, frameClassLoader));
                 entries.add(PreparedEntry.async(name, task));
             } else {
                 entries.add(PreparedEntry.direct(name, content));
@@ -231,12 +236,13 @@ public final class PluginPatcher {
         }
     }
 
-    private byte[] prepareSequentialContent(String name, byte[] content) {
+    private byte[] prepareSequentialContent(
+            String name, byte[] content, ClassLoader frameClassLoader) {
         if (isPluginDescriptor(name)) {
             return modifyPluginDescriptor(content);
         }
         if (name.endsWith(".class")) {
-            return transformClass(name, content);
+            return transformClass(name, content, frameClassLoader);
         }
         return content;
     }
@@ -286,7 +292,8 @@ public final class PluginPatcher {
                 + resourceLimits.maxTotalUncompressedBytes() + " bytes");
     }
 
-    private byte[] transformClass(String entryName, byte[] classBytes) {
+    private byte[] transformClass(
+            String entryName, byte[] classBytes, ClassLoader frameClassLoader) {
         String className = entryName.substring(0, entryName.length() - ".class".length())
                 .replace('/', '.');
 
@@ -305,7 +312,8 @@ public final class PluginPatcher {
 
             byte[] result = classBytes;
             for (ClassTransformer transformer : transformers) {
-                ClassWriter writer = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES);
+                ClassWriter writer = new SafeClassWriter(
+                        ClassWriter.COMPUTE_FRAMES, frameClassLoader);
                 byte[] transformed = transformer.transform(classNode, className, writer);
                 if (transformed != null) {
                     result = transformed;
@@ -455,8 +463,16 @@ public final class PluginPatcher {
 
     private static final class SafeClassWriter extends ClassWriter {
 
-        private SafeClassWriter(int flags) {
+        private final ClassLoader frameClassLoader;
+
+        private SafeClassWriter(int flags, ClassLoader frameClassLoader) {
             super(flags);
+            this.frameClassLoader = frameClassLoader;
+        }
+
+        @Override
+        protected ClassLoader getClassLoader() {
+            return frameClassLoader;
         }
 
         @Override
