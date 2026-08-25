@@ -466,7 +466,7 @@ public final class PluginPatcher {
         private final ClassLoader frameClassLoader;
 
         private SafeClassWriter(int flags, ClassLoader frameClassLoader) {
-            super(flags);
+            super((flags & ~ClassWriter.COMPUTE_FRAMES) | ClassWriter.COMPUTE_MAXS);
             this.frameClassLoader = frameClassLoader;
         }
 

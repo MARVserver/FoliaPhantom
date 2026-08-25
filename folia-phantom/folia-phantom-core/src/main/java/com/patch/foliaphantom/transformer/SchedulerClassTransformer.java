@@ -8,8 +8,6 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -97,15 +95,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         "runTaskTimerAsynchronously"
     };
 
-    /**
-     * クラスノード内の全メソッドを走査し、
-     * スケジューラ関連の呼び出しを変換する。
-     *
-     * @param classNode  変換対象のクラスノード
-     * @param className  クラス内部名
-     * @param writer     出力先の ClassWriter
-     * @return 変換後のバイト配列
-     */
     @Override
     public byte[] transform(ClassNode classNode, String className, ClassWriter writer) {
         List<MethodNode> methods = classNode.methods;
@@ -128,13 +117,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         return writer.toByteArray();
     }
 
-    /**
-     * 単一メソッド内のスケジューラ呼び出しを置き換える。
-     *
-     * @param classNode 変換対象クラス
-     * @param method 変換対象のメソッドノード
-     * @return BukkitRunnable の super 呼び出しを変換した場合 true
-     */
     private boolean transformMethod(ClassNode classNode, MethodNode method) {
         boolean transformedSuperCall = false;
         AbstractInsnNode[] insns = method.instructions.toArray();
@@ -149,11 +131,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         return transformedSuperCall;
     }
 
-    /**
-     * BukkitScheduler のメソッド呼び出しを FoliaPatcher の静的メソッドに置き換える。
-     *
-     * @param methodInsn 検査対象のメソッド呼び出しノード
-     */
     private void replaceSchedulerCall(MethodInsnNode methodInsn) {
         if (!BUKKIT_SCHEDULER_OWNER.equals(methodInsn.owner)) {
             return;
@@ -161,7 +138,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         if (!isSchedulerMethod(methodInsn.name)) {
             return;
         }
-        // 通常のスケジューラメソッド: 第1引数に BukkitScheduler インスタンスを追加
         methodInsn.owner = PATCHER_OWNER;
         methodInsn.desc = "(Lorg/bukkit/scheduler/BukkitScheduler;"
                 + methodInsn.desc.substring(1);
@@ -169,24 +145,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         methodInsn.itf = false;
     }
 
-    /**
-     * BukkitRunnable のインスタンスメソッド呼び出しを
-     * FoliaPatcher の静的メソッドに置き換える。
-     *
-     * <p>通常の {@code INVOKEVIRTUAL} では BukkitRunnable のサブクラス経由の
-     * 呼び出しで owner がサブクラス名になるため owner チェックは行わない。
-     * 代わりに BukkitRunnable のメソッドシグネチャ先頭が
-     * {@code (Lorg/bukkit/plugin/Plugin;} であることを確認して偽陽性を排除する。</p>
-     *
-     * <p>{@code INVOKESPECIAL} は {@code super.runTask*()} のときだけ対象とし、
-     * owner が {@code BukkitRunnable} と完全一致する場合に限定する。変換後の
-     * BukkitTask はサブクラスへ追加する synthetic field に保存する。</p>
-     *
-     * @param method 変換対象メソッド
-     * @param methodInsn 検査対象のメソッド呼び出しノード
-     * @param className 現在のクラス内部名
-     * @return super 呼び出しを変換した場合 true
-     */
     private boolean replaceBukkitRunnableCall(
             MethodNode method, MethodInsnNode methodInsn, String className) {
         int originalOpcode = methodInsn.getOpcode();
@@ -200,13 +158,10 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         if (!isRunnableInstanceMethod(methodInsn.name)) {
             return false;
         }
-        // BukkitRunnable メソッドの第一引数は必ず Plugin。
-        // 別クラスに同名メソッドがある場合の偽陽性を排除する。
         if (!methodInsn.desc.startsWith("(Lorg/bukkit/plugin/Plugin;")) {
             return false;
         }
 
-        // desc の先頭に Runnable 引数を追加: (Lplugin;...) → (Lrunnable;Lplugin;...)
         String newName = methodInsn.name + "_onRunnable";
         String newDesc = "(Ljava/lang/Runnable;" + methodInsn.desc.substring(1);
         methodInsn.owner = PATCHER_OWNER;
@@ -221,10 +176,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         return isSuperCall;
     }
 
-    /**
-     * 変換済み super.runTask*() の戻り値をサブクラス側へ保存する。
-     * 呼び出し結果は元コード向けにスタック上へ残す。
-     */
     private void storeSuperCallTask(MethodNode method, MethodInsnNode methodInsn, String className) {
         InsnList store = new InsnList();
         store.add(new InsnNode(DUP));
@@ -235,13 +186,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         method.instructions.insert(methodInsn, store);
     }
 
-    /**
-     * BukkitRunnable が通常提供するタスク状態 API をサブクラス側で再現する。
-     *
-     * <p>元の BukkitRunnable.cancel() は Bukkit.getScheduler().cancelTask(...) を
-     * 呼ぶため Folia では利用できない。FoliaPatcher が返す BukkitTask を直接
-     * 操作する override を注入する。</p>
-     */
     private void ensureRunnableStateMembers(ClassNode classNode) {
         if (!hasField(classNode, RUNNABLE_TASK_FIELD)) {
             classNode.fields.add(new FieldNode(
@@ -295,26 +239,22 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         return method;
     }
 
-    /** スタックへ保存済み BukkitTask を積み、未スケジュールなら例外を投げる。 */
+    /**
+     * スタックへ保存済み BukkitTask を積む。分岐を生成せず Objects.requireNonNull を
+     * 利用することで、既存 StackMapTable を保持する COMPUTE_MAXS と両立させる。
+     */
     private void appendLoadedTaskOrThrow(InsnList instructions, String className) {
-        LabelNode scheduled = new LabelNode();
         instructions.add(new VarInsnNode(ALOAD, 0));
         instructions.add(new FieldInsnNode(
                 GETFIELD, className, RUNNABLE_TASK_FIELD, BUKKIT_TASK_DESC));
-        instructions.add(new InsnNode(DUP));
-        instructions.add(new JumpInsnNode(IFNONNULL, scheduled));
-        instructions.add(new InsnNode(POP));
-        instructions.add(new TypeInsnNode(NEW, "java/lang/IllegalStateException"));
-        instructions.add(new InsnNode(DUP));
         instructions.add(new LdcInsnNode("Not scheduled yet"));
         instructions.add(new MethodInsnNode(
-                INVOKESPECIAL,
-                "java/lang/IllegalStateException",
-                "<init>",
-                "(Ljava/lang/String;)V",
+                INVOKESTATIC,
+                "java/util/Objects",
+                "requireNonNull",
+                "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;",
                 false));
-        instructions.add(new InsnNode(ATHROW));
-        instructions.add(scheduled);
+        instructions.add(new TypeInsnNode(CHECKCAST, BUKKIT_TASK_OWNER));
     }
 
     private static boolean hasField(ClassNode classNode, String name) {
@@ -335,12 +275,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         return false;
     }
 
-    /**
-     * 指定されたメソッド名が BukkitScheduler の対象メソッドか判定する。
-     *
-     * @param name メソッド名
-     * @return 対象であれば true
-     */
     private static boolean isSchedulerMethod(String name) {
         for (String candidate : SCHEDULER_METHOD_NAMES) {
             if (candidate.equals(name)) {
@@ -350,12 +284,6 @@ public final class SchedulerClassTransformer implements ClassTransformer, Opcode
         return false;
     }
 
-    /**
-     * 指定されたメソッド名が BukkitRunnable のインスタンスメソッドか判定する。
-     *
-     * @param name メソッド名
-     * @return 対象であれば true
-     */
     private static boolean isRunnableInstanceMethod(String name) {
         for (String candidate : RUNNABLE_INSTANCE_METHOD_NAMES) {
             if (candidate.equals(name)) {
