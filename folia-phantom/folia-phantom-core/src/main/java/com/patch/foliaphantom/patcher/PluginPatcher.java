@@ -58,7 +58,8 @@ public final class PluginPatcher {
         "com/patch/foliaphantom/patcher/FoliaPatcher$FoliaBukkitTask.class",
         "com/patch/foliaphantom/patcher/FoliaPatcher$FoliaChunkGenerator.class",
         "com/patch/foliaphantom/patcher/FoliaPatcher$ScheduledTaskStub.class",
-        "com/patch/foliaphantom/patcher/FoliaPatcher$TaskSchedulerFactory.class"
+        "com/patch/foliaphantom/patcher/FoliaPatcher$TaskSchedulerFactory.class",
+        "com/patch/foliaphantom/patcher/BlockReadBridge.class"
     };
 
     private final List<ClassTransformer> transformers;
