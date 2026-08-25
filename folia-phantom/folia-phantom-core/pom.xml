@@ -37,6 +37,7 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
+            <scope>compile</scope>
         </dependency>
         <!-- SLF4J API: ロギング抽象化層 -->
         <dependency>
