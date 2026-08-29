@@ -124,7 +124,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
           build-mode: manual
@@ -137,4 +137,4 @@ jobs:
       - name: Build for CodeQL
         working-directory: folia-phantom
         run: mvn --batch-mode --no-transfer-progress -DskipTests package
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
