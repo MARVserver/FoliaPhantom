@@ -48,7 +48,7 @@ jobs:
 
       - name: Upload packaged artifacts
         if: matrix.java == '21'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pasta-java21-${{ github.sha }}
           path: |
