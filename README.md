@@ -23,6 +23,14 @@ Using ASM 9.7, pasta rewrites compiled `.class` files without requiring plugin s
 
 > Bytecode transformation cannot guarantee that every Bukkit plugin is Folia-safe. Test patched plugins on a staging server before production use.
 
+## Independent open-source project
+
+pasta is no longer a MARVserver project and is now maintained independently in this repository.
+
+The project remains committed to open source. We believe useful infrastructure should be inspectable, reusable, improvable, and shared with the community. Contributions, bug reports, documentation improvements, experiments, forks, and downstream projects are welcome. We want pasta to grow through transparent collaboration and to give back to the open-source ecosystem it depends on.
+
+See [`ANNOUNCEMENT.md`](ANNOUNCEMENT.md) for the project announcement.
+
 ## Peperoncino update
 
 **Peperoncino** adds first-class GitHub Actions integration so plugin projects can run pasta directly in CI. The initial milestone adds:
@@ -75,7 +83,7 @@ Peperoncino exposes pasta as a composite action. While the update is unreleased,
 ```yaml
 - name: Patch for Folia
   id: pasta
-  uses: MARVserver/pasta@develop
+  uses: Summer110622/pasta@develop
   with:
     input: target/my-plugin.jar
     output: build/pasta
@@ -186,7 +194,7 @@ For the GitHub Action, `actions/setup-java` selects the requested JDK and the ru
 ## Build
 
 ```bash
-git clone https://github.com/MARVserver/pasta.git
+git clone https://github.com/Summer110622/pasta.git
 cd pasta/folia-phantom
 mvn clean verify
 ```
